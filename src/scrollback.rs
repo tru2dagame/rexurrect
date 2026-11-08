@@ -5,13 +5,15 @@
 //! - Rex's terminal `format` method renders the block's scrollback, not just
 //!   its screen. It's saved as VT (text plus SGR styles) with soft wraps
 //!   joined, so it reflows at whatever width the restored block has.
+//! - Both format reads use bounded responses and continue through
+//!   `blob_read`, so a scrollback larger than one control response is kept.
 //! - A block on the alternate screen is skipped: it's showing a full-screen
 //!   program (`nvim`, `less`, `top`), and its capture would be a frozen
 //!   picture of that program rather than earlier output. Rex reports the alternate
 //!   screen itself, which is more reliable than guessing from the foreground
 //!   process: a block running `tail -f` keeps its scrollback, and one left
 //!   on the alternate screen by a killed program loses it.
-//! - A block whose scrollback Rex won't hand over because it's too large
+//! - A block whose scrollback Rex still won't hand over because it's too large
 //!   (`too_large`: larger than Rex's limit on one response) is saved without
 //!   it, and save carries on (see [`SavedScrollback::TooLarge`]). Any other
 //!   failure to read scrollback fails the save.

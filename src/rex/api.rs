@@ -363,7 +363,7 @@ impl ProcessInfo {
 /// scrollback and screen (not just the screen, whatever its description
 /// says). Only `format: "vt"` is used: text plus SGR styles, no cursor
 /// movement, modes or OSC sequences, so it's safe to print into a new block.
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize)]
 pub struct FormatArgs {
     pub format: &'static str,
     /// Joins soft-wrapped rows into one line, so the text reflows at any
@@ -374,12 +374,27 @@ pub struct FormatArgs {
     /// screen). Only has an effect with `format: "vt"`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub extra_modes: bool,
+    /// Maximum JSON-encoded content bytes per reply, set by `Rex::terminal_format`.
+    pub max_bytes: usize,
 }
 
 /// The terminal `format` method. CRLF line endings, no final newline.
 #[derive(Debug, Deserialize)]
 pub struct TerminalFormat {
     pub content: String,
+    /// Remaining content is read through this block's `blob_read` method.
+    pub id: Option<u64>,
+    /// Complete output size in UTF-8 bytes, when the server reports it.
+    pub total: Option<usize>,
+}
+
+/// One chunk returned by the terminal's `blob_read` method.
+#[derive(Debug, Deserialize)]
+pub struct TerminalBlob {
+    pub id: u64,
+    pub data: String,
+    pub total: usize,
+    pub eof: bool,
 }
 
 // ---- session.create --------------------------------------------------------

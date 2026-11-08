@@ -273,12 +273,16 @@ no_scrollback = ["claude", "aider"]
 
 Autosave reads the same file, so it uses the new list from its next run.
 
-A block whose scrollback is too large for Rex to hand over (Rex caps one response at 1 MB, which a
-few thousand lines of coloured output can fill) is saved without it, and the save carries on: it
-comes back in its directory with its command typed, but nothing above the prompt. The first
-save to find a block's scrollback too large adds a line to `rexurrect.log` naming its session
-and block; later saves don't repeat it while it stays too large. Clearing the block's scrollback
-(Cmd-K) lets the next save keep it again.
+This fork reads scrollback in 128 KiB chunks through `format` and `blob_read`, so a block's
+scrollback can exceed Rex's 1 MiB control-response limit. Each response also leaves room for
+JSON escaping. Both the mode check and the unwrapped output read use this path. A failed or
+stalled blob read fails the save instead of publishing a truncated snapshot.
+
+If a Rex build still refuses a format response as too large (for example, one without chunked
+format support), the existing fallback remains: the block is saved without scrollback, and the
+save carries on. The first such save adds a line to `rexurrect.log` naming the session and block;
+later saves don't repeat it while it stays too large. See [UPSTREAM.md](UPSTREAM.md) for this
+fork's fixed baseline and validation process.
 
 Without the recorder (you don't use zsh, or skipped that step), or in a block whose shell
 started before you loaded it, rexurrect falls back to the program running in the block at save

@@ -35,8 +35,12 @@ use crate::settings;
 
 use api::{
     CreateSession, CreatedSession, FormatArgs, NewLayer, NewLayerResult, ServerStatus, SessionList,
-    SessionSummary, SessionView, TerminalFormat, TerminalProcess, TerminalPwd,
+    SessionSummary, SessionView, TerminalBlob, TerminalFormat, TerminalProcess, TerminalPwd,
 };
+
+/// Rex measures this limit after JSON string escaping. Leave ample room for
+/// the response envelope below the 1 MiB control-response limit.
+const TERMINAL_CHUNK_BYTES: usize = 128 * 1024;
 
 /// The variable naming the Rex server to talk to. Rex sets it in every
 /// block's shell.
@@ -412,15 +416,83 @@ impl Rex {
         self.block_method(session_id, block_id, "process", json!({}))
     }
 
-    /// The terminal `format` method: the block's scrollback and screen.
+    /// The terminal `format` method: the block's whole scrollback and screen,
+    /// read in bounded chunks so large scrollback fits the control connection.
     pub fn terminal_format(
         &self,
         session_id: &str,
         block_id: &str,
         args: &FormatArgs,
     ) -> Result<TerminalFormat, RexError> {
+        let args = FormatArgs {
+            max_bytes: TERMINAL_CHUNK_BYTES,
+            ..*args
+        };
         let args = serde_json::to_value(args).expect("format arguments serialize to JSON");
-        self.block_method(session_id, block_id, "format", args)
+        let mut formatted: TerminalFormat =
+            self.block_method(session_id, block_id, "format", args)?;
+        let unexpected = |detail: String| RexError::UnexpectedOutput {
+            method: "block.method".into(),
+            detail: format!("terminal scrollback for block {block_id}: {detail}"),
+        };
+        if let Some(id) = formatted.id.take() {
+            // Zero means "newest result", which could change between reads.
+            if id == 0 {
+                return Err(unexpected("format returned a zero blob ID".into()));
+            }
+            let mut offset = formatted.content.len();
+            loop {
+                let part: TerminalBlob = self
+                    .block_method(
+                        session_id,
+                        block_id,
+                        "blob_read",
+                        json!({ "id": id, "offset": offset, "max_bytes": TERMINAL_CHUNK_BYTES }),
+                    )
+                    .map_err(|error| {
+                        if error.is_too_large() {
+                            // Only an initial format refusal may use the older
+                            // server fallback. A failed continuation must not
+                            // publish a snapshot without the rest of this blob.
+                            unexpected(format!("blob_read refused a bounded chunk: {error}"))
+                        } else {
+                            error
+                        }
+                    })?;
+                if part.id != id || formatted.total.is_some_and(|total| total != part.total) {
+                    return Err(unexpected(
+                        "blob_read changed the result ID or total size".into(),
+                    ));
+                }
+                formatted.total = Some(part.total);
+                if part.data.is_empty() && !part.eof {
+                    return Err(unexpected(format!(
+                        "blob_read made no progress at byte offset {offset}"
+                    )));
+                }
+                offset = offset
+                    .checked_add(part.data.len())
+                    .ok_or_else(|| unexpected("blob_read byte offset overflowed".into()))?;
+                if offset > part.total || part.eof != (offset == part.total) {
+                    return Err(unexpected(
+                        "blob_read EOF disagrees with the byte count".into(),
+                    ));
+                }
+                formatted.content.push_str(&part.data);
+                if part.eof {
+                    break;
+                }
+            }
+        }
+        if formatted
+            .total
+            .is_some_and(|total| total != formatted.content.len())
+        {
+            return Err(unexpected(
+                "format total disagrees with the byte count".into(),
+            ));
+        }
+        Ok(formatted)
     }
 
     /// Calls a block method by its short name (`pwd`, `process`, `write`)
