@@ -1,13 +1,13 @@
 [package]
 name = "rexurrect"
-version = "0.4.0"
+version = "0.4.0-tru.1"
 edition = "2024"
 # The oldest Rust that builds every target. CI checks it.
 rust-version = "1.89"
 description = "Save Rex sessions and recreate them after the Rex server stops"
 license = "MIT"
-repository = "https://github.com/cemcatik/rexurrect"
-homepage = "https://github.com/cemcatik/rexurrect"
+repository = "https://github.com/tru2dagame/rexurrect"
+homepage = "https://github.com/tru2dagame/rexurrect"
 readme = "README.md"
 publish = false
 

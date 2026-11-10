@@ -4,11 +4,11 @@ This fork experiments with complete scrollback capture through Rex's bounded
 `format` and `blob_read` responses. It does not install autosave or auto-restore
 as part of building or testing.
 
-The follow-up `preserve-shell-scrollback` branch also keeps every session with
-a window, including HOME shells with default labels and no recorder. See
+The `preserve-shell-scrollback` branch also keeps every session with a window,
+including HOME shells with default labels and no recorder. See
 [ADR-0010](docs/adr/0010-preserve-default-shell-sessions-in-snapshots.md).
-This is a candidate source change; the previously installed `dbdde1d` binary
-does not contain it until a separately reviewed build is installed.
+The `fork-release` branch adds minimal cargo-dist configuration and a thin
+Shell migration script. See [release notes](docs/releases.md).
 
 ## Selected baseline
 
@@ -26,7 +26,9 @@ target. Build from a specific reviewed fork commit. Record that full commit and
 the resulting binary's SHA-256 with the test results. This baseline is a source
 and dependency pin, not a claim that all upstream code has had a security audit.
 
-The experiment adds no dependencies and keeps `Cargo.lock` unchanged. Use
+The fixes add no dependencies. Fork releases change only this package's own
+version in `Cargo.lock`; dependency versions stay pinned. The hash above is
+the original baseline. Use
 `cargo ... --locked` for initial builds. After dependencies are fetched, use
 `--frozen` for offline repeat builds. Do not resolve dependency updates as an
 incidental part of a source merge.

@@ -14,47 +14,39 @@ needs nothing else at runtime.
 > back with it resumed. Autosave runs `save` every 15 minutes, and auto-restore runs `restore`
 > when the Rex server starts.
 
-## Install
+## Install or update
 
-Prebuilt binaries are for macOS, on Apple Silicon and Intel, and for Linux, on x86-64 and ARM64
-(static, so they run on any distribution). Pick one way to install.
-
-**With [Homebrew](https://brew.sh)**, on macOS:
-
-```sh
-brew tap cemcatik/tap
-brew install cemcatik/tap/rexurrect
-```
-
-Tap the tap first: Homebrew 6 and later won't install from a tap you haven't tapped yourself.
-Installing by the formula's full name then trusts only rexurrect, not everything in the tap.
-
-**With the shell installer**, on macOS or Linux, which downloads the binary for your machine and
-puts it in `~/.cargo/bin`, where `cargo install` would:
+This repository adds complete bounded scrollback reads and preserves default
+HOME shell sessions. Version `0.4.0-tru.1` is available for Apple Silicon macOS.
+The command is `rexurrect`. Installation uses cargo-dist's standard release
+archive and checksum; no compiler or Python is needed on the destination Mac.
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/cemcatik/rexurrect/releases/latest/download/rexurrect-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -fL \
+  https://raw.githubusercontent.com/tru2dagame/rexurrect/v0.4.0-tru.1/scripts/install.zsh \
+  -o install.zsh
+/bin/zsh install.zsh --version v0.4.0-tru.1 --autosave
 ```
 
-**With cargo**, from source, with a [Rust toolchain](https://rustup.rs) (1.89 or later)
-installed:
+Run the same script with a new explicit version to update. New installations
+use the normal rexurrect state/config paths and enable a 15-minute job with
+`--autosave`. Existing trial installations retain their snapshots, config,
+endpoint and autosave settings while migrating the command to `rexurrect`.
+Installation does not run save/restore, restart Rex or edit shell/Lua hooks.
 
 ```sh
-cargo install --git https://github.com/cemcatik/rexurrect
+~/.local/bin/rexurrect --build-info
+~/.local/bin/rexurrect save
+# Restore the wrapper/job backup printed by this installer:
+/bin/zsh install.zsh --rollback /absolute/path/to/installation-backup
 ```
 
-That builds `rexurrect` and puts it in `~/.cargo/bin`, which rustup adds to your `PATH`.
+See [release and migration notes](docs/releases.md) before publishing
+or migrating. There are no new runtime update/rollback subcommands, version
+pointers or custom package format. Upstream Homebrew builds do not include this
+fork's fixes; this fork does not publish to the upstream tap.
 
-Each release's binaries carry a GitHub build-provenance attestation. To check that an archive
-from a [release](https://github.com/cemcatik/rexurrect/releases) was built by this repository's
-release workflow:
-
-```sh
-gh attestation verify rexurrect-aarch64-apple-darwin.tar.xz --repo cemcatik/rexurrect
-```
-
-rexurrect talks to Rex through the `rex` CLI that ships with Rex: the one on your `PATH` (it is
-inside Rex blocks), or else the one a running Rex server runs.
+The runtime reference below describes rexurrect's commands.
 
 ### Set up
 

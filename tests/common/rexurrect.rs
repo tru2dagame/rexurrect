@@ -2,14 +2,33 @@
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::OnceLock;
 
 use super::env::prepend_path;
 
-/// The binary under test.
+/// Cargo's binary, or an explicitly selected release artifact. The override
+/// stays in the test runner; child environments remain scrubbed.
 pub fn bin() -> &'static str {
-    env!("CARGO_BIN_EXE_rexurrect")
+    static BIN: OnceLock<String> = OnceLock::new();
+    BIN.get_or_init(|| {
+        let Some(artifact) = std::env::var_os("REXURRECT_TEST_BIN") else {
+            return env!("CARGO_BIN_EXE_rexurrect").to_string();
+        };
+        let path = PathBuf::from(artifact);
+        assert!(path.is_absolute(), "REXURRECT_TEST_BIN must be absolute");
+        let path = path.canonicalize().expect("release artifact must exist");
+        let metadata = path.metadata().expect("reading release artifact metadata");
+        assert!(
+            metadata.is_file() && metadata.permissions().mode() & 0o111 != 0,
+            "REXURRECT_TEST_BIN must name an executable regular file"
+        );
+        path.to_str()
+            .expect("REXURRECT_TEST_BIN must be valid UTF-8")
+            .to_string()
+    })
 }
 
 /// One `rexurrect` invocation, with the harness's scrubbed environment:

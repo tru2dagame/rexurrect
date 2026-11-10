@@ -8,30 +8,19 @@ members = ["cargo:."]
 # The dist version the release workflow uses
 cargo-dist-version = "0.33.1"
 ci = "github"
-# macOS: Rex's `rex` is universal, so Intel Macs run it too. Linux: static
-# musl binaries (every dependency is pure Rust), which run whatever the
-# distribution's glibc.
-targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-  "aarch64-unknown-linux-musl",
-  "x86_64-unknown-linux-musl",
-]
-installers = ["shell", "homebrew"]
+# Manual dispatch defaults to dry-run (candidate artifacts only). Selecting
+# an actual tag is an explicit PUBLIC release, not a draft-release operation.
+dispatch-releases = true
+targets = ["aarch64-apple-darwin"]
+installers = ["shell"]
 # The shell installer puts the binary where `cargo install` does, so
 # switching between the two doesn't move what autosave and auto-restore run.
 install-path = "CARGO_HOME"
 install-updater = false
 hosting = "github"
-# The formula is published to the tap; prerelease tags don't update it.
-# dist puts every target in it, Linux too, and has no way to leave Linux
-# out, but Homebrew on Linux isn't a supported install: the README sends
-# Linux users to the shell installer.
-tap = "cemcatik/homebrew-tap"
-publish-jobs = ["homebrew"]
-# In every archive. The formula installs it in share/rexurrect, where
-# `rexurrect setup` finds it.
-include = ["rexurrect.plugin.zsh"]
+publish-jobs = []
+# Preserve the normal archive, adding only the migration installer.
+include = ["rexurrect.plugin.zsh", "scripts/install.zsh"]
 # So users can check a binary with `gh attestation verify`.
 github-attestations = true
 
