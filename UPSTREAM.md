@@ -7,8 +7,10 @@ as part of building or testing.
 The `preserve-shell-scrollback` branch also keeps every session with a window,
 including HOME shells with default labels and no recorder. See
 [ADR-0010](docs/adr/0010-preserve-default-shell-sessions-in-snapshots.md).
-The `fork-release` branch adds minimal cargo-dist configuration and a thin
-Shell migration script. See [release notes](docs/releases.md).
+The `fork-release` branch uses upstream cargo-dist packaging and the
+`tru2dagame/tap` Homebrew tap. Its one-time helper migrates earlier trial
+installations; normal installs use `brew install` and `brew upgrade`. See
+[release notes](docs/releases.md).
 
 ## Selected baseline
 
@@ -57,11 +59,11 @@ failed blob reads that must preserve the previous snapshot.
 
 Do not run `rexurrect setup`, `autosave install` or the auto-restore hook merely
 to validate a build: they enable persistent behavior. Deployment is a separate
-step after testing. Do not use upstream `scripts/release.sh` for local builds;
-it commits, tags and pushes, and can trigger publishing workflows. Upstream CI
-also selects floating Rust `stable` explicitly, so `rust-toolchain.toml` alone
-does not pin those workflows. Review the build/publishing path before using it
-to distribute fork binaries.
+step after testing. This fork's `scripts/release.sh --check` and `--build` only
+check/build; publication and signed updates to `tru2dagame/homebrew-tap` are
+manual. When reviewing upstream, inspect its release helper and CI too: the
+imported helper commits/tags/pushes, and imported CI selects floating Rust
+`stable`. Keep the fork's review and toolchain boundaries when merging.
 
 ## Reviewing upstream
 

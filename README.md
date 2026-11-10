@@ -14,39 +14,48 @@ needs nothing else at runtime.
 > back with it resumed. Autosave runs `save` every 15 minutes, and auto-restore runs `restore`
 > when the Rex server starts.
 
-## Install or update
+## Install
 
-This repository adds complete bounded scrollback reads and preserves default
-HOME shell sessions. Version `0.4.0-tru.1` is available for Apple Silicon macOS.
-The command is `rexurrect`. Installation uses cargo-dist's standard release
-archive and checksum; no compiler or Python is needed on the destination Mac.
+This fork keeps the normal `rexurrect` command and adds two fixes: complete
+bounded scrollback reads, and preservation of default HOME shell sessions.
+Prebuilt binaries are currently available for Apple Silicon macOS.
 
-```sh
-curl --proto '=https' --tlsv1.2 -fL \
-  https://raw.githubusercontent.com/tru2dagame/rexurrect/v0.4.0-tru.1/scripts/install.zsh \
-  -o install.zsh
-/bin/zsh install.zsh --version v0.4.0-tru.1 --autosave
-```
-
-Run the same script with a new explicit version to update. New installations
-use the normal rexurrect state/config paths and enable a 15-minute job with
-`--autosave`. Existing trial installations retain their snapshots, config,
-endpoint and autosave settings while migrating the command to `rexurrect`.
-Installation does not run save/restore, restart Rex or edit shell/Lua hooks.
+**With [Homebrew](https://brew.sh)**:
 
 ```sh
-~/.local/bin/rexurrect --build-info
-~/.local/bin/rexurrect save
-# Restore the wrapper/job backup printed by this installer:
-/bin/zsh install.zsh --rollback /absolute/path/to/installation-backup
+brew tap tru2dagame/tap
+brew install tru2dagame/tap/rexurrect
 ```
 
-See [release and migration notes](docs/releases.md) before publishing
-or migrating. There are no new runtime update/rollback subcommands, version
-pointers or custom package format. Upstream Homebrew builds do not include this
-fork's fixes; this fork does not publish to the upstream tap.
+Update through the same tap:
 
-The runtime reference below describes rexurrect's commands.
+```sh
+brew upgrade tru2dagame/tap/rexurrect
+```
+
+Homebrew installs the release binary and optional zsh recorder without compiling.
+Existing trial installations need a one-time migration after installation; see
+[release and migration notes](docs/releases.md) before changing their autosave job.
+
+**With the standard shell installer**, which puts `rexurrect` in `~/.cargo/bin`:
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tru2dagame/rexurrect/releases/download/v0.4.1/rexurrect-installer.sh | sh
+```
+
+This explicit URL selects the reviewed release. Homebrew is the normal
+install/update path for this fork.
+
+**With cargo**, from reviewed source and Rust 1.89 or later:
+
+```sh
+cargo install --git https://github.com/tru2dagame/rexurrect --tag v0.4.1 --locked
+```
+
+rexurrect talks to Rex through the `rex` CLI that ships with Rex: the one on your
+`PATH` (it is inside Rex blocks), or else the one a running Rex server runs.
+See [release notes](docs/releases.md) for artifact verification and the manual
+upstream review process.
 
 ### Set up
 

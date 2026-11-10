@@ -12,15 +12,18 @@ ci = "github"
 # an actual tag is an explicit PUBLIC release, not a draft-release operation.
 dispatch-releases = true
 targets = ["aarch64-apple-darwin"]
-installers = ["shell"]
+installers = ["shell", "homebrew"]
 # The shell installer puts the binary where `cargo install` does, so
 # switching between the two doesn't move what autosave and auto-restore run.
 install-path = "CARGO_HOME"
 install-updater = false
 hosting = "github"
+# Generate the normal Formula for our tap. Update it with a reviewed, signed
+# tap commit; CI needs no cross-repository publishing token.
+tap = "tru2dagame/homebrew-tap"
 publish-jobs = []
-# Preserve the normal archive, adding only the migration installer.
-include = ["rexurrect.plugin.zsh", "scripts/install.zsh"]
+# The Formula installs the optional recorder under share/rexurrect.
+include = ["rexurrect.plugin.zsh"]
 # So users can check a binary with `gh attestation verify`.
 github-attestations = true
 

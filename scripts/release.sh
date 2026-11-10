@@ -14,6 +14,7 @@ case "${1:---plan}" in
     echo 'Generated Release workflow: manual tag=dry-run builds candidates only.'
     echo 'Selecting an actual tag in that workflow PUBLICLY publishes a release.'
     echo 'For a reviewable draft, upload the tested exact assets with gh release create --draft.'
+    echo 'Review the generated Formula and update tru2dagame/homebrew-tap with a signed commit.'
     ;;
   --check|--build)
     [ "$#" -eq 1 ] || exit 2
@@ -29,8 +30,8 @@ case "${1:---plan}" in
       command -v rex >/dev/null || { echo 'Error: full isolated integration tests need rex on PATH' >&2; exit 1; }
       cargo fmt --check
       cargo clippy --all-targets --locked -- -D warnings
-      for file in scripts/install.zsh scripts/test-install.zsh; do zsh -n "$file"; done
-      zsh scripts/test-install.zsh
+      for file in scripts/migrate-legacy-install.zsh scripts/test-migrate-legacy-install.zsh; do zsh -n "$file"; done
+      zsh scripts/test-migrate-legacy-install.zsh
       env -u REXURRECT_TEST_BIN cargo test --locked -- --test-threads=4
     else
       dist_bin=${REXURRECT_DIST_BIN:-dist}

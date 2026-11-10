@@ -9,7 +9,7 @@ archive=$1 expected_sha=$2 tag=$3 expected_commit=$4 report_dir=$5
 [[ ! -e "$report_dir" ]] || fail 'Use a new report directory for each acceptance run.'
 [[ -f "$archive" && ! -L "$archive" ]] || fail 'Archive must be a regular file.'
 [[ "$expected_sha" =~ ^[0-9a-f]{64}$ && "$expected_commit" =~ ^[0-9a-f]{40}$ ]] || fail 'Use full SHA-256 and commit values.'
-[[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-tru\.[0-9]+$ ]] || fail 'Use an explicit fork tag such as v0.4.0-tru.1.'
+[[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Use an explicit release tag such as v0.4.1.'
 root=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
 mkdir -p "$report_dir"
 report_dir=$(cd -- "$report_dir" && pwd -P)

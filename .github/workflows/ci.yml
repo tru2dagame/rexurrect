@@ -116,14 +116,14 @@ jobs:
         run: cargo test --tests --no-run --locked
 
   recorder:
-    name: Shell syntax and installer tests
+    name: Shell syntax and legacy migration tests
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: for file in rexurrect.plugin.zsh scripts/install.zsh scripts/test-install.zsh; do zsh -n "$file" || exit; done
-      - run: zsh scripts/test-install.zsh
+      - run: for file in rexurrect.plugin.zsh scripts/migrate-legacy-install.zsh scripts/test-migrate-legacy-install.zsh; do zsh -n "$file" || exit; done
+      - run: zsh scripts/test-migrate-legacy-install.zsh
 
   deny:
     name: Dependency policy
