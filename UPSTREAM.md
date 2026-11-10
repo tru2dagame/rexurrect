@@ -4,6 +4,12 @@ This fork experiments with complete scrollback capture through Rex's bounded
 `format` and `blob_read` responses. It does not install autosave or auto-restore
 as part of building or testing.
 
+The follow-up `preserve-shell-scrollback` branch also keeps every session with
+a window, including HOME shells with default labels and no recorder. See
+[ADR-0010](docs/adr/0010-preserve-default-shell-sessions-in-snapshots.md).
+This is a candidate source change; the previously installed `dbdde1d` binary
+does not contain it until a separately reviewed build is installed.
+
 ## Selected baseline
 
 | Item | Fixed value |

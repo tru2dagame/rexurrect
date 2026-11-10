@@ -199,7 +199,7 @@ fn save_snapshot(
         let mut captured =
             capture::saved_session(rex, &context, &view, lineage).with_context(saving)?;
         programs_seen.append(&mut captured.programs_seen);
-        if worth_saving(&captured.saved, &context.home) {
+        if worth_saving(&captured.saved) {
             let SessionWithScrollback { saved, too_large } = captured
                 .with_scrollback(rex, &context.scrollback)
                 .with_context(saving)?;
@@ -307,16 +307,18 @@ fn latest_has_no_sessions(state: &StateDir) -> bool {
 /// saves (ADR-0009).
 ///
 /// A session that saved no windows has nothing to restore. Rex keeps a
-/// session live, with no windows, after its last shell exits. Neither has an
-/// untouched session.
-fn worth_saving(session: &SavedSession, home: &Path) -> bool {
-    !session.windows.is_empty() && !is_untouched(session, home)
+/// session live, with no windows, after its last shell exits. Every windowed
+/// session is kept: default labels, HOME and no last command cannot prove
+/// that a shell has no useful scrollback (ADR-0010).
+fn worth_saving(session: &SavedSession) -> bool {
+    !session.windows.is_empty()
 }
 
 /// An untouched session: one window holding one shell block and nothing
 /// floating, with default window and block labels, its working directory
-/// still `home` and no last command. Restoring it would bring back nothing a
-/// new session doesn't have. Its label doesn't count: Rex's generated
+/// still `home` and no last command. This metadata heuristic is used only for
+/// app-session cleanup, not save eligibility: such a shell may have useful
+/// scrollback. Its label doesn't count: Rex's generated
 /// session labels can't be told apart from user-set ones.
 ///
 /// Judged from the session as saved: a last command counts however save

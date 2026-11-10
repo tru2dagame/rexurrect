@@ -177,14 +177,14 @@ rexurrect list      # list the snapshots, newest first
   labels get fresh default labels on restore, not stale copies like `Window 1a2b3c4d`. Each
   save is a new timestamped snapshot; `latest.json` points at the newest. The newest 10
   snapshots are kept (set `keep` in the [config file](#settings) to keep a different number).
-  - Untouched sessions are left out: one window holding one shell, with Rex's default window
-    and block labels, still in your home directory, and no last command. Sessions that Rex or
-    you create and then abandon therefore don't pile up across restarts. A session's own label
-    doesn't count, because Rex's generated ones (`amber-ridge`) look like any other, so a
-    session you only renamed is still untouched. A restored session keeps its last command, so
-    it doesn't turn untouched just because you haven't run anything in it since.
-  - If there's nothing to save (no sessions, or only untouched sessions or sessions with no
-    windows left) because you closed them, `save` writes a snapshot with no sessions, so the
+  - This fork saves every session with at least one window, including a default shell in your
+    home directory with no recorded last command. Such a shell can hold useful scrollback
+    after its command finishes. Empty default windows are saved too: names, working directory
+    and command records cannot reliably establish that a terminal has no output worth keeping.
+    No shell recorder or custom tab name is required for scrollback preservation.
+    See [ADR-0010](docs/adr/0010-preserve-default-shell-sessions-in-snapshots.md).
+  - If there's nothing to save (no sessions, or only sessions with no windows left) because
+    you closed them, `save` writes a snapshot with no sessions, so the
     next start brings nothing back. It writes only one: while the latest snapshot has no
     sessions, `save` says nothing changed and writes nothing, so autosaves don't push your
     earlier snapshots out. Those stay in `list`, to bring back with `restore --snapshot <id>`.
@@ -945,14 +945,15 @@ until `init.lua` has finished, and carries on in the background:
   while auto-restore is creating yours, so every restart would leave this app session, untouched,
   beside them. Once auto-restore has created sessions, it closes that app session: it looks for 30
   seconds after restoring, and closes the first live session it finds that restore didn't
-  create and that's untouched (see [Usage](#usage)), the earliest if there are several
+  create and that's untouched (see [Glossary](GLOSSARY.md)), the earliest if there are several
   (`app_session_watch` in the [config file](#settings) sets how long it looks). It
   closes at most one per server instance, and names it in `rexurrect.log`. A session you open
   yourself in those 30 seconds and haven't used yet looks just like the app's, so if the app's
-  doesn't turn up first, yours is closed instead; nothing in it was worth restoring. An app
-  session that turns up after the 30 seconds is left alone, and while it's untouched `save`
-  never saves it. Only auto-restore closes it: `restore` and the restore a `save` runs first
-  never close an app session. See
+  doesn't turn up first, yours is closed instead. This unchanged cleanup heuristic uses
+  metadata and does not establish whether the terminal has useful output. An app
+  session that turns up after the 30 seconds is left alone and is included in future saves
+  like any other session with a window. Only auto-restore closes it: `restore` and the restore
+  a `save` runs first never close an app session. See
   [ADR-0004](docs/adr/0004-close-the-app-session-after-auto-restore.md).
 
 `rex config check` runs `init.lua` too. There auto-restore says it wasn't started by a Rex server

@@ -5,8 +5,9 @@
 //!
 //! Rex doesn't say who created a session, so rexurrect recognises the app
 //! session only by what it isn't: restore didn't create it (it isn't in the
-//! lineage map), and nothing in it is worth restoring (it's untouched, as
-//! save judges it). Once auto-restore has created sessions, it looks for one
+//! lineage map), and its metadata matches the untouched heuristic. Save
+//! eligibility is separate: default shells can still hold useful scrollback.
+//! Once auto-restore has created sessions, it looks for one
 //! for a while, and closes the first it finds: the earliest-created, if
 //! several turn up at once. At most one per server instance: the app
 //! creates one, and a session the user has just opened looks the same.

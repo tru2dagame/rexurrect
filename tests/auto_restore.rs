@@ -737,7 +737,7 @@ fn with_a_latest_snapshot_with_no_sessions_auto_restore_creates_and_closes_nothi
         env.save(&before);
     }
     let server = server_watching_for(&env, 2);
-    untouched_session(&server, "zz-app");
+    let app = untouched_session(&server, "zz-app");
 
     turn_on_auto_restore(&env, &server);
     let entries = wait_for_auto_restores(&env, 1);
@@ -745,6 +745,10 @@ fn with_a_latest_snapshot_with_no_sessions_auto_restore_creates_and_closes_nothi
     assert!(entries[0].contains("0 created"), "{entries:#?}");
     assert!(!entries[0].contains("closed app session"), "{entries:#?}");
     assert_eq!(server.sorted_labels(), ["zz-app"]);
+    // Auto-restore left the app session alone. Close it explicitly before
+    // checking an empty-server save: a default window is now saved too.
+    server.kill_session(&app.id);
+    assert_eq!(server.sessions(), []);
     let saved = env.save(&server);
     assert!(!saved.stdout.contains("restored first"), "{saved}");
     assert!(saved.stdout.contains("nothing changed"), "{saved}");

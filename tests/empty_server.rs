@@ -1,4 +1,4 @@
-//! An empty server: one with no sessions worth saving.
+//! An empty server: one with no sessions that still have windows.
 //!
 //! On an emptied server instance, one rexurrect restored into, the user
 //! closed its sessions, and a save records that with a snapshot with no
@@ -96,13 +96,14 @@ fn save_after_every_session_was_killed_saves_a_snapshot_with_no_sessions() {
 
 /// A session with no windows has nothing to restore: it's left out instead
 /// of failing the save, and a server holding only such sessions is empty,
-/// here on an emptied server instance.
+/// here on an emptied server instance. A default HOME shell beside it is
+/// still kept while its window exists.
 #[test]
 fn a_session_whose_last_shell_exited_is_left_out_of_the_snapshot() {
-    let env = TestEnv::new();
+    let env = TestEnv::builder().own_home().build();
     let server = env.start_server();
     let a = env.mkdir("a");
-    let kept = server.create_session("zz-kept", &[window(shell(&a))]);
+    let kept = server.create_session("zz-kept", &[window(shell(env.home()))]);
     let emptied = server.create_session("zz-emptied", &[window(shell(&a))]);
     server.wait_for_pwds(&kept);
     exit_last_shell(&server, &emptied);

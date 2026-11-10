@@ -73,14 +73,14 @@ _Avoid_: backup, save file
 The most recently written snapshot, and the one restore uses unless told otherwise.
 
 **Empty server**:
-A server with no live sessions worth saving: none at all, or only untouched ones. On an emptied server instance, saving from one records that nothing is live, so the next start restores nothing. On any other server instance (an unrestored one, or one whose restore failed and that nothing has been saved from since), saving from one never replaces the latest snapshot.
+A server with no live session containing a window: no sessions, or only sessions whose windows have all closed. Default home-directory shells are saved even without a recorded last command. On an emptied server instance, saving from an empty server records that nothing is live, so the next start restores nothing. On any other server instance (an unrestored one, or one whose restore failed and that nothing has been saved from since), saving from one never replaces the latest snapshot.
 
 **Emptied server instance**:
 A server instance that's an empty server because the user closed its sessions: rexurrect restored into it, at least in part, or has saved from it since a failed restore. An empty server on any other instance is one the user hasn't worked in yet.
 _Avoid_: closed server, cleared server
 
 **Untouched session**:
-A session with nothing worth restoring: one window holding one shell block, default window and block labels, its working directory still home, and no last command. Its label doesn't count, so a session that was only renamed is still untouched. Untouched sessions aren't saved.
+A session matching the metadata heuristic used by app-session cleanup: one window holding one shell block, default window and block labels, its working directory still home, and no last command. Its label doesn't count, so a session that was only renamed still matches. This heuristic cannot establish whether scrollback exists. This fork saves untouched sessions whenever they contain a window; the heuristic remains separate and is not used to discard snapshot content.
 
 **Scrollback**:
 A shell block's earlier output, saved with a snapshot and printed back above the block's new prompt when it's restored. Three kinds of block have none saved: one showing a full-screen program (on the terminal's alternate screen), one running a program that draws its interface on the main screen (`claude`, by default), and one whose scrollback is too large for Rex to hand over (larger than Rex's limit on one response).

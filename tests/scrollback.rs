@@ -263,34 +263,83 @@ fn scrollback_is_private_and_kept_only_as_long_as_its_snapshot() {
 }
 
 #[test]
-fn an_untouched_sessions_scrollback_is_not_kept() {
-    // No recorder, and rexurrect's home is the untouched session's directory:
-    // after `seq` it has no last command and is still at home.
-    let env = TestEnv::new();
+fn a_home_shell_without_a_recorder_keeps_20000_lines_after_a_manual_save_and_restart() {
+    // A default shell in HOME must keep its output even though no recorder
+    // records its command and no foreground program remains when save runs.
+    let env = TestEnv::builder().own_home().build();
     let server = env.start_server();
-    let home = env.mkdir("home");
-    let untouched = server.create_session("zz-untouched", &[window(shell(&home))]);
-    let touched = server.create_session("zz-touched", &[window(shell(env.mkdir("a")))]);
-    server.wait_for_pwds(&untouched);
-    server.wait_for_pwds(&touched);
-    let block = untouched.block_ids()[0];
-    server.run(&untouched.id, block, "seq 1 20000");
-    server.wait_for_capture(&untouched.id, block, "the whole sequence", |c| {
+    let fixture = server.create_session("zz-home-scrollback", &[window(block(json!({})))]);
+    let block = fixture.block_ids()[0];
+    let reported_home = server.wait_for_pwd(&fixture.id, block);
+    assert_eq!(
+        std::fs::canonicalize(reported_home).unwrap(),
+        std::fs::canonicalize(env.home()).unwrap(),
+        "the fixture shell is in its isolated HOME"
+    );
+    let view = server.view(&fixture.id);
+    let windows = view["windows"].as_array().expect("windows");
+    assert_eq!(windows.len(), 1);
+    assert_eq!(
+        windows[0]["label"],
+        default_window_label(&fixture.windows[0].id),
+        "the window has Rex's generated label"
+    );
+    let layers = windows[0]["layers"].as_array().expect("layers");
+    assert_eq!(layers.len(), 1, "no floating layers");
+    let blocks = layers[0]["blocks"].as_array().expect("blocks");
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(
+        blocks[0]["label"], "shell",
+        "the block has its default label"
+    );
+
+    server.run(&fixture.id, block, "seq 1 20000");
+    server.wait_for_capture(&fixture.id, block, "the whole sequence", |c| {
         c.contains("\n20000\n")
     });
-
-    let out = env
-        .rexurrect(&server)
-        .env("HOME", &home)
-        .arg("save")
-        .run()
-        .assert_success();
-
-    assert!(out.stdout.contains("saved 1 session(s)"), "{out}");
-    let kept = disk_usage(&env.state_dir());
+    server.wait_for_empty_prompt(&fixture.id, block);
+    let process = server.block_method(&fixture.id, block, "process", json!({}));
+    assert_eq!(process["foreground"]["argv0"], "-zsh");
     assert!(
-        kept < 20_000,
-        "the untouched session's 20,000 lines aren't kept ({kept} bytes)"
+        !env.state_dir().join("recorder").join(block).exists(),
+        "no recorder supplied a last command"
+    );
+
+    let out = env.rexurrect(&server).arg("save").run().assert_success();
+    assert!(out.stdout.contains("saved 1 session(s)"), "{out}");
+
+    let original_session = fixture.id.clone();
+    drop(server);
+    let restarted = env.start_server();
+    env.restore(&restarted);
+    let restored = restarted.the_session_labelled("zz-home-scrollback");
+    assert_ne!(
+        restored, original_session,
+        "restored on a new server instance"
+    );
+    let block = restarted.block_ids(&restored).remove(0);
+    restarted.wait_for_empty_prompt(&restored, &block);
+    let capture = restarted.capture(&restored, &block);
+    let lines: Vec<&str> = capture
+        .lines()
+        .map(|line| line.trim_end_matches('\r'))
+        .collect();
+    let first = lines
+        .iter()
+        .position(|line| *line == "1")
+        .expect("first line");
+    for number in 1..=20_000 {
+        assert_eq!(
+            lines.get(first + number - 1).copied(),
+            Some(number.to_string().as_str()),
+            "restored numbered line {number}"
+        );
+    }
+    let restored_home = restarted.wait_for_pwd(&restored, &block);
+    assert_eq!(
+        std::fs::canonicalize(restored_home).unwrap(),
+        std::fs::canonicalize(env.home()).unwrap(),
+        "the restored shell remains in HOME"
     );
 }
 

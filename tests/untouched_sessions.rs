@@ -1,9 +1,6 @@
-//! Untouched sessions aren't saved, so sessions that Rex or the user create
-//! and abandon don't pile up across restarts.
-//!
-//! An untouched session: one window holding one shell block, default window
-//! and block labels, its working directory still home, and no last command.
-//! Its label doesn't count.
+//! Every session with a window is saved, including a default shell in HOME
+//! with no recorded command. Labels and command-recorder availability must
+//! not decide whether the session survives a save and restore.
 //!
 //! Each test gives its servers and rexurrect a home directory of their own
 //! ([`TestEnvBuilder::own_home`]), so "home" is a directory the test knows
@@ -40,7 +37,7 @@ fn labels_saved(env: &TestEnv, server: &Server) -> Vec<String> {
 }
 
 #[test]
-fn a_session_with_one_shell_in_home_default_labels_and_no_last_command_isnt_saved() {
+fn a_session_with_one_shell_in_home_default_labels_and_no_last_command_is_saved() {
     let env = env_with_own_home();
     let server = env.start_server();
     let a = env.mkdir("a");
@@ -49,16 +46,14 @@ fn a_session_with_one_shell_in_home_default_labels_and_no_last_command_isnt_save
     server.wait_for_pwds(&untouched);
     server.wait_for_pwds(&touched);
 
-    assert_eq!(labels_saved(&env, &server), ["zz-touched"]);
+    assert_eq!(labels_saved(&env, &server), ["zz-touched", "zz-untouched"]);
 }
 
-/// A second block or window, a user-set window or block label, a working
-/// directory other than home (even one below it), or a last command, whether
-/// recorded or the program in the foreground of a block with no record: each
-/// session here differs from an untouched one in one of these ways only. (A
-/// last command restore carried forward is covered further down.)
+/// A default HOME shell and sessions with extra windows, blocks, labels,
+/// directories or last commands are all kept. A last command carried
+/// forward through another save and restore is covered further down.
 #[test]
-fn any_one_change_from_untouched_gets_a_session_saved() {
+fn windowed_sessions_are_saved_with_default_or_custom_metadata() {
     let env = env_with_own_home();
     let server = env.start_server();
     let projects = env.home().join("projects");
@@ -97,15 +92,16 @@ fn any_one_change_from_untouched_gets_a_session_saved() {
             "zz-recorded",
             "zz-two-blocks",
             "zz-two-windows",
+            "zz-untouched",
             "zz-window-label",
         ]
     );
 }
 
-/// Rex's generated session labels (`amber-ridge`) can't be told apart from
-/// user-set ones, so a session's label never makes it touched.
+/// Renaming a session is not needed to keep it, but its chosen label still
+/// survives a save and restore when the window and block labels are default.
 #[test]
-fn a_session_that_was_only_renamed_isnt_saved() {
+fn a_session_that_was_only_renamed_is_saved() {
     let env = env_with_own_home();
     let server = env.start_server();
     let a = env.mkdir("a");
@@ -115,13 +111,13 @@ fn a_session_that_was_only_renamed_isnt_saved() {
     server.wait_for_pwds(&renamed);
     server.wait_for_pwds(&touched);
 
-    assert_eq!(labels_saved(&env, &server), ["zz-touched"]);
+    assert_eq!(labels_saved(&env, &server), ["zz-renamed", "zz-touched"]);
 }
 
 /// Clearing a label gives back a default one: `Window <8 hex>` for a window,
 /// and `Block <8 hex>` (not `shell`) for a block.
 #[test]
-fn a_session_whose_window_and_block_labels_were_cleared_isnt_saved() {
+fn a_session_whose_window_and_block_labels_were_cleared_is_saved() {
     let env = env_with_own_home();
     let server = env.start_server();
     let a = env.mkdir("a");
@@ -138,7 +134,7 @@ fn a_session_whose_window_and_block_labels_were_cleared_isnt_saved() {
     server.wait_for_pwds(&cleared);
     server.wait_for_pwds(&touched);
 
-    assert_eq!(labels_saved(&env, &server), ["zz-touched"]);
+    assert_eq!(labels_saved(&env, &server), ["zz-cleared", "zz-touched"]);
 }
 
 /// Without an OSC 7 emitter (zsh without oh-my-zsh, say) a shell never
@@ -146,7 +142,7 @@ fn a_session_whose_window_and_block_labels_were_cleared_isnt_saved() {
 /// instead: a physical path (`/private/tmp/...`), while `HOME` here is
 /// logical (`/tmp/...`). It's home all the same.
 #[test]
-fn a_shell_in_home_that_never_reports_its_working_directory_is_untouched_too() {
+fn a_shell_in_home_that_never_reports_its_working_directory_is_saved_too() {
     let env = TestEnv::builder()
         .own_home()
         .zshrc_line("precmd_functions=(${precmd_functions:#_rxt_osc7})")
@@ -160,14 +156,13 @@ fn a_shell_in_home_that_never_reports_its_working_directory_is_untouched_too() {
         assert_eq!(server.pwd(&session.id, session.block_ids()[0]), None);
     }
 
-    assert_eq!(labels_saved(&env, &server), ["zz-touched"]);
+    assert_eq!(labels_saved(&env, &server), ["zz-touched", "zz-untouched"]);
 }
 
-/// A server whose only sessions are untouched is an empty server: like one
-/// with no sessions at all, on an emptied server instance it's saved as a
-/// snapshot with no sessions.
+/// Closing one session must not erase the remaining default HOME shells
+/// from the next snapshot. They still have windows worth restoring.
 #[test]
-fn save_on_an_emptied_server_instance_holding_only_untouched_sessions_saves_no_sessions() {
+fn save_after_closing_a_session_keeps_the_remaining_default_home_shells() {
     let env = env_with_own_home();
     let server = env.start_server();
     let a = env.mkdir("a");
@@ -184,18 +179,22 @@ fn save_on_an_emptied_server_instance_holding_only_untouched_sessions_saves_no_s
     env.save(&server);
 
     let listed = env.listed(&server);
+    let newest = listed.lines().next().unwrap();
     assert!(
-        listed.lines().next().unwrap().ends_with("(no sessions)"),
+        newest.contains("zz-untouched") && newest.contains("zz-renamed"),
         "{listed}"
     );
     kill_every_session(&server);
     env.restore(&server);
-    assert_eq!(server.sessions(), [], "zz-closed came back");
+    assert_eq!(
+        server.sorted_labels(),
+        ["zz-renamed", "zz-untouched"],
+        "the remaining shells return, while zz-closed stays closed"
+    );
 }
 
-/// Restore carries a block's last command forward, so a restored session
-/// whose only content is that command doesn't turn untouched just because
-/// nothing has run in it since.
+/// A restored default shell keeps its recorded last command through later
+/// saves even when nothing else has run in it.
 #[test]
 fn a_session_whose_only_content_is_a_last_command_stays_saved_through_a_restore() {
     let env = env_with_own_home();
