@@ -8,10 +8,9 @@ rules:
   excessive-permissions:
     ignore:
       - release.yml
-  # Every expansion is the tag's name (`github.ref_name`, and plan's
-  # `tag-flag` made from it) or the build matrix `dist plan` computes from
-  # this repository's own config. Only someone who can push to the repository
-  # can push a tag, and the build jobs run only on a tag push.
+  # Expansions are the maintainer-selected workflow_dispatch tag or the
+  # build matrix computed from this repository's dist config. Dispatch is
+  # restricted to repository writers; PRs only plan and cannot publish.
   template-injection:
     ignore:
       - release.yml

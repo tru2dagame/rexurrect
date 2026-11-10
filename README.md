@@ -16,45 +16,44 @@ needs nothing else at runtime.
 
 ## Install
 
-Prebuilt binaries are for macOS, on Apple Silicon and Intel, and for Linux, on x86-64 and ARM64
-(static, so they run on any distribution). Pick one way to install.
+This fork keeps the normal `rexurrect` command and adds two fixes: complete
+bounded scrollback reads, and preservation of default HOME shell sessions.
+Prebuilt binaries are currently available for Apple Silicon macOS.
 
-**With [Homebrew](https://brew.sh)**, on macOS:
-
-```sh
-brew tap cemcatik/tap
-brew install cemcatik/tap/rexurrect
-```
-
-Tap the tap first: Homebrew 6 and later won't install from a tap you haven't tapped yourself.
-Installing by the formula's full name then trusts only rexurrect, not everything in the tap.
-
-**With the shell installer**, on macOS or Linux, which downloads the binary for your machine and
-puts it in `~/.cargo/bin`, where `cargo install` would:
+**With [Homebrew](https://brew.sh)**:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/cemcatik/rexurrect/releases/latest/download/rexurrect-installer.sh | sh
+brew tap tru2dagame/tap
+brew install tru2dagame/tap/rexurrect
 ```
 
-**With cargo**, from source, with a [Rust toolchain](https://rustup.rs) (1.89 or later)
-installed:
+Update through the same tap:
 
 ```sh
-cargo install --git https://github.com/cemcatik/rexurrect
+brew upgrade tru2dagame/tap/rexurrect
 ```
 
-That builds `rexurrect` and puts it in `~/.cargo/bin`, which rustup adds to your `PATH`.
+Homebrew installs the release binary and optional zsh recorder without compiling.
 
-Each release's binaries carry a GitHub build-provenance attestation. To check that an archive
-from a [release](https://github.com/cemcatik/rexurrect/releases) was built by this repository's
-release workflow:
+**With the standard shell installer**, which puts `rexurrect` in `~/.cargo/bin`:
 
 ```sh
-gh attestation verify rexurrect-aarch64-apple-darwin.tar.xz --repo cemcatik/rexurrect
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tru2dagame/rexurrect/releases/download/v0.4.1/rexurrect-installer.sh | sh
 ```
 
-rexurrect talks to Rex through the `rex` CLI that ships with Rex: the one on your `PATH` (it is
-inside Rex blocks), or else the one a running Rex server runs.
+This explicit URL selects the reviewed release. Homebrew is the normal
+install/update path for this fork.
+
+**With cargo**, from reviewed source and Rust 1.89 or later:
+
+```sh
+cargo install --git https://github.com/tru2dagame/rexurrect --tag v0.4.1 --locked
+```
+
+rexurrect talks to Rex through the `rex` CLI that ships with Rex: the one on your
+`PATH` (it is inside Rex blocks), or else the one a running Rex server runs.
+See [release notes](docs/releases.md) for artifact verification and the manual
+upstream review process.
 
 ### Set up
 

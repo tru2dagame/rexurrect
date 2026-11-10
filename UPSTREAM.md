@@ -4,11 +4,12 @@ This fork experiments with complete scrollback capture through Rex's bounded
 `format` and `blob_read` responses. It does not install autosave or auto-restore
 as part of building or testing.
 
-The follow-up `preserve-shell-scrollback` branch also keeps every session with
-a window, including HOME shells with default labels and no recorder. See
+The `preserve-shell-scrollback` branch also keeps every session with a window,
+including HOME shells with default labels and no recorder. See
 [ADR-0010](docs/adr/0010-preserve-default-shell-sessions-in-snapshots.md).
-This is a candidate source change; the previously installed `dbdde1d` binary
-does not contain it until a separately reviewed build is installed.
+The `fork-release` branch uses upstream cargo-dist packaging and the
+`tru2dagame/tap` Homebrew tap. Installs use `brew install` and `brew upgrade`. See
+[release notes](docs/releases.md).
 
 ## Selected baseline
 
@@ -26,7 +27,9 @@ target. Build from a specific reviewed fork commit. Record that full commit and
 the resulting binary's SHA-256 with the test results. This baseline is a source
 and dependency pin, not a claim that all upstream code has had a security audit.
 
-The experiment adds no dependencies and keeps `Cargo.lock` unchanged. Use
+The fixes add no dependencies. Fork releases change only this package's own
+version in `Cargo.lock`; dependency versions stay pinned. The hash above is
+the original baseline. Use
 `cargo ... --locked` for initial builds. After dependencies are fetched, use
 `--frozen` for offline repeat builds. Do not resolve dependency updates as an
 incidental part of a source merge.
@@ -55,11 +58,11 @@ failed blob reads that must preserve the previous snapshot.
 
 Do not run `rexurrect setup`, `autosave install` or the auto-restore hook merely
 to validate a build: they enable persistent behavior. Deployment is a separate
-step after testing. Do not use upstream `scripts/release.sh` for local builds;
-it commits, tags and pushes, and can trigger publishing workflows. Upstream CI
-also selects floating Rust `stable` explicitly, so `rust-toolchain.toml` alone
-does not pin those workflows. Review the build/publishing path before using it
-to distribute fork binaries.
+step after testing. This fork's `scripts/release.sh --check` and `--build` only
+check/build; publication and signed updates to `tru2dagame/homebrew-tap` are
+manual. When reviewing upstream, inspect its release helper and CI too: the
+imported helper commits/tags/pushes, and imported CI selects floating Rust
+`stable`. Keep the fork's review and toolchain boundaries when merging.
 
 ## Reviewing upstream
 

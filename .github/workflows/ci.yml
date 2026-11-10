@@ -1,17 +1,17 @@
-# Fast checks for every pull request and push to main.
+# Fast checks for every pull request and push to the maintained branches.
 #
 # The integration tests (tests/*.rs) run against real Rex servers, and Rex is
 # a private beta: CI never installs, downloads or references it. They're only
-# compiled here. Run them locally with `cargo test`; the release script won't
-# tag a version until they pass.
+# compiled here. Run them locally with `cargo test`; release acceptance also
+# runs them against the actual packaged binary.
 
 name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, fork-release]
   push:
-    branches: [main]
+    branches: [main, fork-release]
 
 permissions:
   contents: read
@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: 1.89.0
           components: rustfmt
       - run: cargo fmt --check
 
@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: 1.89.0
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo clippy --all-targets --locked -- -D warnings
@@ -62,7 +62,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: 1.89.0
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo doc --no-deps --document-private-items --locked
         env:
@@ -77,7 +77,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: 1.89.0
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Unit tests
         run: cargo test --bins --locked
@@ -106,7 +106,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: stable
+          toolchain: 1.89.0
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo clippy --all-targets --locked -- -D warnings
@@ -116,7 +116,7 @@ jobs:
         run: cargo test --tests --no-run --locked
 
   recorder:
-    name: Recorder syntax
+    name: Zsh recorder syntax
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -144,12 +144,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Read from Cargo.toml, so the version checked is always the one declared.
-      - id: msrv
-        run: echo "version=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+      # Keep the declared minimum consistent with the pinned CI toolchain.
+      - name: Confirm the declared minimum
+        run: test "$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)" = '1.89'
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: ${{ steps.msrv.outputs.version }}
+          toolchain: 1.89.0
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo build --all-targets --locked
 
