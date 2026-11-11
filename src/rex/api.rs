@@ -12,6 +12,7 @@
 
 use std::path::{Path, PathBuf};
 
+use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 
 use crate::timestamp::Timestamp;
@@ -267,21 +268,55 @@ pub struct TerminalPwd {
     pub pwd: Option<String>,
 }
 
-/// The terminal `process` method. Rex always reports `foreground` and
-/// `home`, so they're required: without them a save would quietly lose last
-/// commands and working directories.
+/// The terminal `process` method. A command block kept open after its
+/// command exits has `last_exit` instead of any running processes.
 #[derive(Debug, Deserialize)]
+#[serde(try_from = "TerminalProcessResponse")]
 pub struct TerminalProcess {
     /// The process in the terminal's foreground: the block's shell while it's
-    /// idle, otherwise the program it's running.
-    pub foreground: ProcessInfo,
+    /// idle, otherwise the program it's running. None after its command exits.
+    pub foreground: Option<ProcessInfo>,
     /// The foreground process's ancestors, nearest first, ending with `login`.
     /// Rex leaves it out when the foreground process is the block's first
     /// (a command it started without `login`).
-    #[serde(default)]
     pub ancestors: Vec<ProcessInfo>,
     /// The user's home directory.
     pub home: PathBuf,
+}
+
+#[derive(Deserialize)]
+struct TerminalProcessResponse {
+    foreground: Option<ProcessInfo>,
+    #[serde(default)]
+    ancestors: Vec<ProcessInfo>,
+    home: PathBuf,
+    child: Option<IgnoredAny>,
+    last_exit: Option<TerminalExit>,
+}
+
+#[derive(Deserialize)]
+struct TerminalExit {
+    #[serde(rename = "exit_code")]
+    _exit_code: i32,
+}
+
+impl TryFrom<TerminalProcessResponse> for TerminalProcess {
+    type Error = &'static str;
+
+    fn try_from(response: TerminalProcessResponse) -> Result<Self, Self::Error> {
+        if response.foreground.is_none()
+            && (response.last_exit.is_none()
+                || response.child.is_some()
+                || !response.ancestors.is_empty())
+        {
+            return Err("missing field `foreground` without a completed terminal command");
+        }
+        Ok(Self {
+            foreground: response.foreground,
+            ancestors: response.ancestors,
+            home: response.home,
+        })
+    }
 }
 
 impl TerminalProcess {
@@ -298,12 +333,13 @@ impl TerminalProcess {
     /// [`ProcessInfo::is_shell`]): a command block has no shell, and its
     /// command is its foreground program.
     pub fn foreground_program(&self) -> Option<&ProcessInfo> {
+        let foreground = self.foreground.as_ref()?;
         let is_program = if self.ancestors.is_empty() {
-            !self.foreground.is_shell()
+            !foreground.is_shell()
         } else {
             self.ancestors.iter().any(|ancestor| ancestor.name != LOGIN)
         };
-        is_program.then_some(&self.foreground)
+        is_program.then_some(foreground)
     }
 }
 
@@ -520,7 +556,7 @@ mod tests {
     /// A block whose first process, `foreground`, is in its foreground.
     fn first_process(foreground: ProcessInfo) -> TerminalProcess {
         TerminalProcess {
-            foreground,
+            foreground: Some(foreground),
             ancestors: Vec::new(),
             home: PathBuf::from("/home/u"),
         }
@@ -528,6 +564,36 @@ mod tests {
 
     fn is_program(foreground: ProcessInfo) -> bool {
         first_process(foreground).foreground_program().is_some()
+    }
+
+    #[test]
+    fn a_completed_command_has_no_foreground_program() {
+        for response in [
+            r#"{"last_exit":{"exit_code":0},"home":"/home/u"}"#,
+            r#"{"last_exit":{"exit_code":-1,"error":"signal: terminated"},"foreground":null,"child":null,"home":"/home/u"}"#,
+        ] {
+            let process: TerminalProcess = serde_json::from_str(response).unwrap();
+            assert!(process.foreground.is_none());
+            assert!(process.foreground_program().is_none());
+        }
+    }
+
+    #[test]
+    fn a_missing_foreground_needs_a_valid_exit_and_no_running_processes() {
+        for response in [
+            r#"{"home":"/home/u"}"#,
+            r#"{"last_exit":null,"home":"/home/u"}"#,
+            r#"{"last_exit":{},"home":"/home/u"}"#,
+            r#"{"last_exit":{"exit_code":"0"},"home":"/home/u"}"#,
+            r#"{"last_exit":{"exit_code":0},"child":{"pid":1},"home":"/home/u"}"#,
+            r#"{"last_exit":{"exit_code":0},"ancestors":[{"pid":1,"name":"login"}],"home":"/home/u"}"#,
+            r#"{"last_exit":{"exit_code":0}}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<TerminalProcess>(response).is_err(),
+                "accepted incomplete process response: {response}"
+            );
+        }
     }
 
     #[test]

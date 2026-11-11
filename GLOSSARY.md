@@ -38,6 +38,7 @@ _Avoid_: terminal block
 
 **Command block**:
 A block Rex started with a command rather than a shell: the command is its first process, and no shell runs in it. It has a shell block's flavor and is saved like one, and comes back as a shell block with the command as its last command.
+If kept open after its command exits, it still saves its layout and scrollback; no foreground command is inferred from the exit status.
 
 **Remote block**:
 A block that lives on a host rather than on the local server.
