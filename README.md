@@ -16,8 +16,9 @@ needs nothing else at runtime.
 
 ## Install
 
-This fork keeps the normal `rexurrect` command and adds two fixes: complete
-bounded scrollback reads, and preservation of default HOME shell sessions.
+This fork keeps the normal `rexurrect` command and adds complete bounded
+scrollback reads, preservation of default HOME shell sessions, and support for
+command blocks kept open after their commands exit.
 Prebuilt binaries are currently available for Apple Silicon macOS.
 
 **With [Homebrew](https://brew.sh)**:
@@ -38,7 +39,7 @@ Homebrew installs the release binary and optional zsh recorder without compiling
 **With the standard shell installer**, which puts `rexurrect` in `~/.cargo/bin`:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tru2dagame/rexurrect/releases/download/v0.4.1/rexurrect-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tru2dagame/rexurrect/releases/download/v0.4.2/rexurrect-installer.sh | sh
 ```
 
 This explicit URL selects the reviewed release. Homebrew is the normal
@@ -47,7 +48,7 @@ install/update path for this fork.
 **With cargo**, from reviewed source and Rust 1.89 or later:
 
 ```sh
-cargo install --git https://github.com/tru2dagame/rexurrect --tag v0.4.1 --locked
+cargo install --git https://github.com/tru2dagame/rexurrect --tag v0.4.2 --locked
 ```
 
 rexurrect talks to Rex through the `rex` CLI that ships with Rex: the one on your
@@ -1057,26 +1058,7 @@ Terms (session, window, block, label, lineage, ...) follow [GLOSSARY.md](GLOSSAR
 
 ## Releasing
 
-```sh
-scripts/release.sh 0.2.0
-```
-
-The script refuses to release unless the working tree is clean, the tag `v0.2.0` doesn't exist
-yet, and formatting, clippy and the **full** `cargo test` pass, integration tests included, so it
-needs Rex installed. It checks all of that before changing anything. Then it bumps the version,
-commits `chore: release v0.2.0`, tags it, and pushes the commit and the tag together.
-
-The tag starts the release workflow, which [dist](https://axodotdev.github.io/cargo-dist) generates
-from `dist-workspace.toml`: it builds the binaries for macOS (Apple Silicon and Intel) and Linux
-(x86-64 and ARM64), attests them, publishes the GitHub release with the shell installer, and
-updates the `rexurrect` formula in [cemcatik/homebrew-tap](https://github.com/cemcatik/homebrew-tap).
-A prerelease version (`0.2.0-rc.1`) publishes a GitHub release and leaves the formula alone.
-Every pull request runs dist's plan, so a broken release config shows up before a tag does.
-
-Change the release workflow through `dist-workspace.toml` and `dist generate`, never by hand: a
-hand-edited workflow makes dist's plan fail. That includes the actions it uses, pinned to commit
-SHAs in `[dist.github-action-commits]`; Dependabot leaves that workflow alone.
-
-The repository needs, set by hand: a `HOMEBREW_TAP_TOKEN` secret (a fine-grained token with
-contents read and write on `cemcatik/homebrew-tap` only), immutable releases, and the policy that
-requires actions pinned to full commit SHAs.
+See [release preparation and artifact verification](docs/releases.md). This fork
+uses cargo-dist's standard Apple Silicon macOS archive and installers, with a
+manual signed update to [tru2dagame/homebrew-tap](https://github.com/tru2dagame/homebrew-tap).
+The release helper only checks and builds; commits, tags and publication are explicit.

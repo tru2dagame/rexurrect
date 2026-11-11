@@ -1,8 +1,9 @@
 # Releases
 
 This fork keeps upstream's `rexurrect` command, runtime configuration and
-optional zsh recorder. Its functional changes are the bounded scrollback read
-and preservation of default HOME shell sessions. Rust/Cargo are pinned to
+optional zsh recorder. Its functional changes are the bounded scrollback read,
+preservation of default HOME shell sessions, and saving command blocks kept open
+after their commands exit. Rust/Cargo are pinned to
 1.89.0; dependencies remain locked.
 
 ## Install and update
@@ -45,7 +46,7 @@ and shell-installed executables on `PATH`.
 
    ```sh
    scripts/verify-release-artifact.sh archive.tar.xz <archive-sha256> \
-     v0.4.1 <reviewed-source-commit> /new/outside/checkout/acceptance
+     v0.4.2 <reviewed-source-commit> /new/outside/checkout/acceptance
    ```
 
 4. After review/authorization, tag the accepted source and publish the accepted
@@ -60,7 +61,7 @@ and shell-installed executables on `PATH`.
 
 `dist-workspace.toml` enables standard Homebrew generation but deliberately uses
 `publish-jobs = []`. Updating the tap is manual, so CI needs no cross-repository
-token. Releases use ordinary stable version tags such as `v0.4.1`; no special
+token. Releases use ordinary stable version tags such as `v0.4.2`; no special
 version suffix is needed. Do not assume that publishing a GitHub Release
 updated the tap.
 
