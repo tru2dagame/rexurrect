@@ -85,28 +85,40 @@ fn a_save_that_restores_first_saves_the_blocks_it_restored_as_restore_created_th
     assert_eq!(third.window_shapes(&restored), [layout().expected_shape()]);
 }
 
-/// Restoring first and saving read the server instance once, so they can't
-/// disagree on which instance they restored into and saved.
+/// Restoring first and saving use the same initial instance. A second
+/// status call checks that it was still current after capture.
 #[test]
-fn a_save_that_restores_first_reads_the_server_status_once() {
+fn a_save_that_restores_first_checks_the_same_server_before_and_after_capture() {
     let env = TestEnv::new();
     env.saved_on_an_earlier_server(&["zz-proj"]);
     let server = env.start_server();
-    let calls = env.root().join("server-status-calls");
-    let stub = RexStub::new(&env).after(
-        "server.status",
-        &format!("echo >> {}", common::stub::sh_quote(&calls)),
-    );
+    let recorder = RecordingRex::new(&env);
 
     let out = env
         .rexurrect(&server)
         .arg("save")
-        .path_prepend(stub.dir())
+        .path_prepend(recorder.dir())
         .run()
         .assert_success();
     assert!(out.stdout.contains("restored first"), "{out}");
-    let count = std::fs::read_to_string(&calls).unwrap().lines().count();
-    assert_eq!(count, 1, "{out}");
+    let calls: Vec<_> = recorder
+        .runs()
+        .into_iter()
+        .filter_map(|args| {
+            args.split_once(" api call ")
+                .map(|(_, rest)| rest.to_string())
+        })
+        .collect();
+    let positions: Vec<_> = calls
+        .iter()
+        .enumerate()
+        .filter_map(|(index, call)| (call == "server.status -").then_some(index))
+        .collect();
+    assert_eq!(positions, [0, calls.len() - 1], "{calls:?}");
+    assert!(
+        calls.iter().any(|call| call == "session.create -"),
+        "{calls:?}"
+    );
 }
 
 #[test]
