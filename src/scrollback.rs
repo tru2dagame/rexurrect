@@ -247,6 +247,10 @@ fn terminal_scrollback(rex: &Rex, block: &BlockRef) -> Result<Option<String>, Re
             &FormatArgs {
                 format: "vt",
                 unwrap: true,
+                // An underfilled pane includes blank screen rows after its
+                // last content by default. Replaying those turns them into
+                // scrollback. Rex's trim keeps blank rows within the output.
+                trim: true,
                 ..FormatArgs::default()
             },
         )?

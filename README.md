@@ -261,7 +261,9 @@ say) gets the program's resume command typed instead: see [Resuming programs](#r
 
 Each restored block also shows its scrollback, the output it held at save time, above the
 `Last login:` line and the new prompt, styles included. It wraps to the block's current width
-and reflows when you resize the block. A block that was showing a full-screen program (`nvim`,
+and reflows when you resize the block. New saves omit trailing blank screen rows so an
+underfilled pane doesn't replay unused space between the saved output and the new prompt.
+Blank lines within the output are preserved. A block that was showing a full-screen program (`nvim`,
 `less`, `top`, anything on the terminal's alternate screen) gets no scrollback, so you never see
 a frozen picture of the program; its command still comes back typed at the prompt.
 

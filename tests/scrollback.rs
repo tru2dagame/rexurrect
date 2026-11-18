@@ -63,6 +63,67 @@ fn a_shell_blocks_earlier_output_is_printed_above_the_new_prompt_with_its_last_c
 }
 
 #[test]
+fn save_omits_unused_screen_rows_and_keeps_blank_lines_between_output() {
+    let env = TestEnv::new();
+    let server = env.start_server();
+    let fixture = server.create_session("zz-short-output", &[window(shell(env.mkdir("a")))]);
+    server.wait_for_pwds(&fixture);
+    let block = fixture.block_ids()[0];
+    server.resize(&fixture.id, block, 80, 40);
+    server.run(&fixture.id, block, r"printf 'zz-first\n\n\nzz-last\n'");
+    let expected = "\nzz-first\n\n\nzz-last\n";
+    server.wait_for_capture(&fixture.id, block, "short output and its prompt", |text| {
+        text.contains(expected) && text.trim_end().ends_with(" %")
+    });
+
+    env.save(&server);
+    let state = env.state_dir();
+    let snapshot: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(state.join("latest.json")).unwrap()).unwrap();
+    let path = snapshot["sessions"][0]["windows"][0]["layout"]["block"]["scrollback"]
+        .as_str()
+        .expect("saved scrollback");
+    let saved = std::fs::read_to_string(state.join(path)).unwrap();
+    let saved_tail = saved
+        .split_once(&expected.replace('\n', "\r\n"))
+        .expect("both blank output lines must be saved")
+        .1;
+    assert_eq!(
+        saved_tail.lines().count(),
+        1,
+        "expected only the old prompt after the last output, got {saved_tail:?}"
+    );
+
+    drop(server);
+    let server = env.start_server();
+    env.rexurrect(&server)
+        .args(["restore", "--force"])
+        .run()
+        .assert_success();
+    let restored = server.the_session_labelled("zz-short-output");
+    assert_ne!(restored, fixture.id, "replayed into a new session");
+    let block = server.block_ids(&restored).remove(0);
+    let capture = server.wait_for_capture(&restored, &block, "both shell prompts", |text| {
+        text.split_once(expected).is_some_and(|(_, tail)| {
+            tail.lines()
+                .skip(1)
+                .any(|line| line.trim_end().ends_with(" %"))
+        })
+    });
+    let (_, replayed_tail) = capture
+        .split_once(expected)
+        .unwrap_or_else(|| panic!("both blank output lines must be replayed:\n{capture:?}"));
+    assert!(
+        replayed_tail
+            .lines()
+            .skip(1)
+            .take(2)
+            .any(|line| !line.trim().is_empty()),
+        "the new shell starts directly after the replayed prompt:\n{capture}"
+    );
+}
+
+#[test]
 fn a_block_showing_a_full_screen_program_gets_no_scrollback_replay() {
     let env = TestEnv::with_recorder();
     let server = env.start_server();

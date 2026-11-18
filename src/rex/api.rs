@@ -406,6 +406,9 @@ pub struct FormatArgs {
     /// width instead of breaking where the block's width was.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub unwrap: bool,
+    /// Omits trailing blank rows from the formatted terminal.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub trim: bool,
     /// Prefixes the terminal's modes (`ESC[?1049h` while on the alternate
     /// screen). Only has an effect with `format: "vt"`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -414,7 +417,7 @@ pub struct FormatArgs {
     pub max_bytes: usize,
 }
 
-/// The terminal `format` method. CRLF line endings, no final newline.
+/// The terminal `format` method. VT output separates rows with CRLF.
 #[derive(Debug, Deserialize)]
 pub struct TerminalFormat {
     pub content: String,
