@@ -157,7 +157,7 @@ How rexurrect resumes one program: which foreground program it matches, what res
 _Avoid_: plugin (that's the zsh plugin, or a Neovim or Rex plugin), strategy, integration
 
 **Auto-resume**:
-A resume whose command restore runs rather than types. Only programs the user has listed auto-resume; by default, none do. A listed program that can't resume (it reported no resume state, or its Neovim session isn't there) still comes back running: restore runs the program's own command line as it was at the save, never the block's last command, which may only have started it (`make edit`, `git commit`). A definition can opt out of that (`fallback = "none"`): its program then gets the block's last command typed, as if it weren't listed, never run.
+A resume whose command restore runs rather than types. Only programs the user has listed auto-resume; by default, none do. If a listed program can't resume, `fallback = "command"` runs its saved launch command and `fallback = "none"` only types the block's last command. Claude Code and Codex default to `"none"` to avoid resending a prompt. The last command may only have started the program (`make edit`, `git commit`), so restore only types it.
 _Avoid_: auto-start, allow-list (bare)
 
 **Resume state**:

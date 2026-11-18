@@ -10,6 +10,15 @@ use crate::rex::api::{
 use crate::scrollback::Replay;
 use crate::snapshot::{SavedBlock, SavedLayout, SavedSession, SavedWindow};
 
+/// Rex can queue `initial_input` while the terminal is still in canonical
+/// mode. On macOS this can discard bytes from a line of 1024 bytes or more.
+/// Leave room for Enter within the same bound when the input auto-runs.
+pub const MAX_INITIAL_INPUT_BYTES: usize = 1023;
+
+pub fn initial_input_fits(command: &str, submit: bool) -> bool {
+    command.len() + usize::from(submit) <= MAX_INITIAL_INPUT_BYTES
+}
+
 /// `saved` as restore creates it. Every block comes back as a plain shell
 /// block in its saved directory, or in `home` if that directory no longer
 /// exists, with its last command typed at its prompt if it can be typed
@@ -139,4 +148,18 @@ pub fn typed_command(block: &SavedBlock) -> Option<&str> {
 /// control character, tab included (typed, a tab triggers completion).
 pub fn is_typeable(command: &str) -> bool {
     !command.is_empty() && !command.chars().any(char::is_control)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::initial_input_fits;
+
+    #[test]
+    fn initial_input_budget_counts_utf8_bytes_and_enter() {
+        let limit = "中".repeat(341);
+        assert!(initial_input_fits(&limit, false));
+        assert!(!initial_input_fits(&limit, true));
+        assert!(initial_input_fits(&format!("{}ab", &limit[3..]), true));
+        assert!(!initial_input_fits(&(limit + "x"), false));
+    }
 }

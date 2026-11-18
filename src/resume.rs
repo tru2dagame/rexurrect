@@ -14,10 +14,10 @@
 //!
 //! A program listed in `auto_resume` auto-resumes (ADR-0006): its resume
 //! command is typed followed by Enter, so the block's shell runs it, records
-//! it, and is there when it exits. One that can't resume still comes back
-//! running, by default (its definition's `fallback`): its own command line
-//! as it was at the save, never the block's last command, which may only
-//! have started it (`make edit`).
+//! it, and is there when it exits. If it can't resume, its definition's
+//! `fallback` determines whether to run its own command line from the save
+//! or just type the block's last command. Claude and Codex default to just
+//! typing, since the saved command line can include a prompt.
 
 use std::collections::HashSet;
 
@@ -182,12 +182,28 @@ mod tests {
     }
 
     #[test]
-    fn a_listed_duplicate_runs_its_own_command_line() {
-        let claude = block("claude", "claude", Some("abc"), "claude");
+    fn a_listed_duplicate_conversation_gets_its_last_command_typed() {
+        let claude = block("claude", "claude", Some("abc"), "claude 'initial prompt'");
         assert_eq!(
             inputs(&["claude"], &[claude.clone(), claude]),
-            [run("claude --resume abc"), run("claude")]
+            [run("claude --resume abc"), typed("claude")]
         );
+    }
+
+    #[test]
+    fn codex_without_reported_state_only_runs_its_command_line_with_explicit_fallback() {
+        let codex = block("codex", "codex", None, "codex 'initial prompt'");
+        assert_eq!(
+            inputs(&["codex"], std::slice::from_ref(&codex)),
+            [typed("codex")]
+        );
+
+        let table: toml::Table = "[programs.codex]\nfallback = \"command\"".parse().unwrap();
+        let programs =
+            Programs::configured(&table["programs"], std::path::Path::new("/c")).unwrap();
+        let auto_resume = vec!["codex".to_string()];
+        let mut resuming = Resuming::new(&programs, &auto_resume);
+        assert_eq!(resuming.input(&codex), run("codex 'initial prompt'"));
     }
 
     /// Only reported state makes two blocks one program's: a definition that
@@ -205,9 +221,9 @@ mod tests {
 
     #[test]
     fn a_listed_program_without_a_command_line_to_run_gets_its_last_command_typed() {
-        let mut claude = block("claude", "claude", None, "x");
-        claude.resume.as_mut().unwrap().command_line = None;
-        assert_eq!(inputs(&["claude"], &[claude]), [typed("claude")]);
+        let mut nvim = block("make edit", "nvim", None, "nvim src/main.rs");
+        nvim.resume.as_mut().unwrap().command_line = None;
+        assert_eq!(inputs(&["nvim"], &[nvim]), [typed("make edit")]);
     }
 
     #[test]

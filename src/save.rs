@@ -207,6 +207,16 @@ fn save_snapshot(
             sessions.push(saved);
         }
     }
+    // Calls can reconnect to a new instance at the same endpoint, where
+    // Rex may have carried over the old session and block IDs.
+    let current = rex
+        .server_status()
+        .with_context(|| "checking the Rex server before publishing the snapshot")?;
+    if current.host_id != server.host_id || current.instance_id != server.instance_id {
+        return Err(Error::new(
+            "the Rex server changed during capture; the latest snapshot is unchanged",
+        ));
+    }
     // Remembered whether or not a snapshot is written: they're what the
     // blocks were seen running.
     let mut remembered = false;

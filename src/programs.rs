@@ -192,7 +192,7 @@ impl Default for Programs {
                     resume: format!("claude --resume {STATE_PLACEHOLDER}"),
                     requires_file: None,
                     hook: Some(Hook::ClaudeCode),
-                    fallback: Fallback::Command,
+                    fallback: Fallback::None,
                 },
                 ProgramDefinition {
                     name: "codex".to_string(),
@@ -201,7 +201,7 @@ impl Default for Programs {
                     resume: format!("codex resume {STATE_PLACEHOLDER}"),
                     requires_file: None,
                     hook: Some(Hook::Codex),
-                    fallback: Fallback::Command,
+                    fallback: Fallback::None,
                 },
             ],
         }

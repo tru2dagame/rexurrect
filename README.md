@@ -18,7 +18,9 @@ needs nothing else at runtime.
 
 This fork keeps the normal `rexurrect` command and adds complete bounded
 scrollback reads, preservation of default HOME shell sessions, and support for
-command blocks kept open after their commands exit.
+command blocks kept open after their commands exit. It also protects the latest
+snapshot when Rex restarts during a save and avoids automatically replaying agent
+prompts or truncated commands during restore.
 Prebuilt binaries are currently available for Apple Silicon macOS.
 
 **With [Homebrew](https://brew.sh)**:
@@ -39,7 +41,7 @@ Homebrew installs the release binary and optional zsh recorder without compiling
 **With the standard shell installer**, which puts `rexurrect` in `~/.cargo/bin`:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tru2dagame/rexurrect/releases/download/v0.4.2/rexurrect-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tru2dagame/rexurrect/releases/download/v0.5.0/rexurrect-installer.sh | sh
 ```
 
 This explicit URL selects the reviewed release. Homebrew is the normal
@@ -48,7 +50,7 @@ install/update path for this fork.
 **With cargo**, from reviewed source and Rust 1.89 or later:
 
 ```sh
-cargo install --git https://github.com/tru2dagame/rexurrect --tag v0.4.2 --locked
+cargo install --git https://github.com/tru2dagame/rexurrect --tag v0.5.0 --locked
 ```
 
 rexurrect talks to Rex through the `rex` CLI that ships with Rex: the one on your
@@ -196,6 +198,8 @@ rexurrect list      # list the snapshots, newest first
     can change) or the snapshot fails validation (every session needs a window, every split
     ratio must be between 0 and 1), `save` writes nothing, exits non-zero and says what didn't
     match.
+  - If Rex changes instances during capture or doesn't answer the final status check,
+    `save` exits non-zero and leaves the latest snapshot in place.
 - **`restore`** recreates each saved session from the latest snapshot, unless that session is
   already live, and prints what it `created`, `replaced`, `skipped` and why anything `failed`.
   One session failing doesn't stop the others; `restore` exits non-zero if any failed. Running it
@@ -589,19 +593,25 @@ An auto-resumed program runs in the block's shell, as if you had pressed Enter: 
 shell's history, the recorder records it as the block's last command, and when you quit it
 you're at your prompt in the block's directory.
 
-A listed program that can't resume (Claude Code that reported no conversation, Neovim without
-a `Session.vim`, or a second block in a conversation another block resumes) still comes back
-running: restore runs its own command line as it was at the save (`nvim src/main.rs`,
-`claude --model opus`), so it comes back without its old state. Never the block's last command,
-which may only have started it: a block where `make edit` or `git commit` opened Neovim never
-reruns `make edit` or `git commit`. A program whose command line couldn't be read at the save
-(one with a line break in an argument, say) gets its last command typed instead.
+If Claude Code or Codex has no usable conversation ID, or another restored block is already
+resuming the same conversation, restore only types its last command for you to review. That
+avoids resending a prompt from the original launch. You can explicitly set
+`fallback = "command"` under `[programs.claude]` or `[programs.codex]` to run the saved
+launch command in that case.
+
+Neovim and new program definitions default to `fallback = "command"`. When they cannot
+resume, restore runs the program's saved command line (`nvim src/main.rs`, for example).
+This uses the foreground program's command line, so `make edit` or `git commit` that
+opened Neovim is only ever typed for review. If the saved launch command is unavailable, or
+the definition sets `fallback = "none"`, restore types the last command for review.
 
 An auto-resumed program starts as soon as restore creates its block, which, under auto-restore,
 may be before the Rex app has attached to the server.
 
-A program listed in `auto_resume` whose definition sets `fallback = "none"` comes back with its
-last command typed instead, when it can't resume.
+Restore skips input over 1,023 bytes, including the Enter it would use for auto-resume.
+The block still gets its saved scrollback and a fresh prompt, and the command stays in the
+source snapshot. Restore reports the skip because a shell still starting can truncate the
+queued input.
 
 ### Your own definitions
 

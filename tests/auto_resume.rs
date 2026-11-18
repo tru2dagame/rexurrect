@@ -1,8 +1,8 @@
 //! Auto-resume: programs listed in `auto_resume` in the config file come
 //! back running. Restore types their resume command followed by Enter, so
-//! the block's shell runs it; a listed program that can't resume runs its
-//! own command line from the save instead. Nothing runs by default
-//! (ADR-0006).
+//! the block's shell runs it. A listed program that can't resume falls back
+//! to running its saved command line or typing its last command, depending
+//! on its definition. Nothing runs by default (ADR-0006).
 //!
 //! Programs are stand-ins ([`stand_in_bin`]), first on every block's `PATH`.
 
@@ -82,21 +82,19 @@ fn a_listed_neovim_with_no_session_vim_comes_back_running_its_command_line_not_i
 }
 
 #[test]
-fn a_listed_claude_that_reported_nothing_comes_back_running_as_it_was_started() {
+fn a_listed_claude_that_reported_nothing_does_not_submit_its_original_prompt() {
     let env = TestEnv::new();
     env.write_config("app_session_watch = 1\nauto_resume = [\"claude\"]\n");
     stand_in_bin(&env, "claude");
     let server = env.start_server();
     let dir = env.mkdir("a");
-    let (session, _) = running(&server, "zz-claude", &dir, "claude --model opus");
+    let (session, _) = running(&server, "zz-claude", &dir, "claude 'initial prompt'");
 
     let (restored, block) = restarted(&env, &server, &session, "zz-claude");
 
-    assert_eq!(
-        wait_for_runs(&dir, "claude", 2),
-        ["--model opus", "--model opus"]
-    );
-    server.wait_for_foreground(&restored, &block, "claude");
+    server.wait_for_typed(&restored, &block, "claude 'initial prompt'");
+    assert_eq!(server.foreground(&restored, &block).as_deref(), Some("zsh"));
+    assert_eq!(runs(&dir, "claude"), ["initial prompt"]);
 }
 
 #[test]

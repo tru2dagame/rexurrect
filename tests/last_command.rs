@@ -154,6 +154,47 @@ fn restore_never_types_a_multi_line_command_even_if_the_snapshot_holds_one() {
     }
 }
 
+#[test]
+fn oversized_initial_input_is_skipped_without_losing_scrollback() {
+    let env = TestEnv::builder()
+        .zshrc_line("sleep 1; echo zz-shell-ready")
+        .build();
+    let server = env.start_server();
+    let dir = env.mkdir("a");
+    let fixture = server.create_session("zz-long-input", &[window(shell(&dir))]);
+    server.wait_for_pwds(&fixture);
+    let block = fixture.block_ids()[0];
+    server.run(&fixture.id, block, "echo zz-output-before-restore");
+    server.wait_for_capture(&fixture.id, block, "output before restore", |capture| {
+        capture.contains("\nzz-output-before-restore\n")
+    });
+    let payload = format!("zz-start-{}-zz-end", "abc中".repeat(900));
+    let command = format!("echo '{payload}' > zz-command-ran");
+    env.write_recorder_file(block, &command);
+
+    env.save(&server);
+    server.kill_session(&fixture.id);
+    let out = env.restore(&server);
+    assert!(
+        out.stdout.contains("skipped oversized terminal input"),
+        "{out}"
+    );
+    let restored = server.the_session_labelled("zz-long-input");
+    let block = server.block_ids(&restored).remove(0);
+
+    let capture = server.wait_for_capture(&restored, &block, "the restored shell prompt", |text| {
+        text.matches("\nzz-shell-ready\n").count() >= 2 && text.trim_end().ends_with(" %")
+    });
+    assert!(capture.contains("\nzz-output-before-restore\n"));
+    assert!(!capture.contains("zz-start-"));
+    assert!(!dir.join("zz-command-ran").exists());
+    let state = env.state_dir();
+    let original = std::fs::read_to_string(state.join("latest.json")).unwrap();
+    assert!(original.contains(&command));
+    let starting = std::fs::read_to_string(state.join("starting-sessions.json")).unwrap();
+    assert!(!starting.contains("zz-start-"));
+}
+
 /// Saves, kills `session` and restores; returns the restored session (the one
 /// labelled `label`) and its first block.
 fn save_kill_restore(

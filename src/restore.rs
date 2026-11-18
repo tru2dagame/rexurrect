@@ -619,9 +619,21 @@ impl Creating<'_> {
         let label = saved.label.clone();
         let saved = exited::without_exited_programs(saved, &self.recorder, self.exited_before);
         let mut as_created = create::as_created(&saved, &self.home, &self.replay);
+        let mut long_inputs = 0;
         let mut inputs: Vec<Option<Input>> = as_created
-            .blocks()
-            .map(|b| self.resuming.input(b))
+            .blocks_mut()
+            .map(|block| {
+                let input = self.resuming.input(block)?;
+                if create::initial_input_fits(input.command(), matches!(input, Input::Run(_))) {
+                    return Some(input);
+                }
+                long_inputs += 1;
+                // A save during startup must not treat the skipped input as
+                // a command typed at this prompt or a program resumed here.
+                block.last_command = None;
+                block.resume = None;
+                None
+            })
             .collect();
         let keystrokes: Vec<Option<String>> = inputs
             .iter()
@@ -652,6 +664,12 @@ impl Creating<'_> {
         // A layer that can't be created leaves the session restored without
         // it: a note, as below.
         let mut notes = Vec::new();
+        if long_inputs > 0 {
+            notes.push(format!(
+                "skipped oversized terminal input for {long_inputs} block(s) (limit: {} bytes)",
+                create::MAX_INITIAL_INPUT_BYTES
+            ));
+        }
         let layer_ids = new_layers(rex, &created, &requests.floating_layers, &mut notes);
         without_missing_layers(&mut as_created, &mut inputs, &layer_ids);
         // session.create leaves the last window active: open on the first.

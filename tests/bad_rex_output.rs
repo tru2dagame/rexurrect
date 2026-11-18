@@ -115,6 +115,45 @@ fn a_session_list_in_another_shape_fails_save_instead_of_looking_like_an_empty_s
     assert_latest_is_unchanged(&env, &server, &fixture, &layout);
 }
 
+#[test]
+fn an_instance_change_during_save_keeps_the_previous_snapshot() {
+    let env = TestEnv::new();
+    env.write_config("keep = 1");
+    let (server, _, _) = server_with_a_saved_split(&env);
+    let state = env.state_dir();
+    let latest = state.join("latest.json");
+    let original = std::fs::read_link(&latest).unwrap();
+    let mut status = server.call("server.status", &json!({}));
+    status["instance_id"] = json!("replacement-instance");
+    let replacement = RexStub::new(&env).answer("server.status", &status);
+    let stub = RexStub::new(&env);
+    // Switch the stub after listing while still answering the rest of the
+    // capture from the same server, as if Rex carried over all the old IDs.
+    let install = format!(
+        "mv {} {}",
+        stub::sh_quote(&replacement.dir().join("rex")),
+        stub::sh_quote(&stub.dir().join("rex")),
+    );
+    let stub = stub.after("session.list", &install);
+
+    let out = env
+        .rexurrect(&server)
+        .path_prepend(stub.dir())
+        .arg("save")
+        .run()
+        .assert_failure();
+    assert!(
+        out.stderr.contains("Rex server changed during capture"),
+        "{out}"
+    );
+    assert_eq!(std::fs::read_link(&latest).unwrap(), original);
+    assert!(state.join(original).is_file());
+    assert_eq!(
+        std::fs::read_dir(state.join("snapshots")).unwrap().count(),
+        1
+    );
+}
+
 /// Rex omits `windows` for a session that has none, so a renamed `windows`
 /// must not pass for a session with no windows (which save leaves out).
 #[test]
