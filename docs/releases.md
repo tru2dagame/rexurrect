@@ -5,7 +5,8 @@ optional zsh recorder. Its functional changes are the bounded scrollback read,
 preservation of default HOME shell sessions, and saving command blocks kept open
 after their commands exit. Starting with v0.5.0, saves recheck the server before
 publishing a snapshot, and restores handle unavailable agent sessions and long
-command lines more conservatively. Rust/Cargo are pinned to
+command lines more conservatively. Starting with v0.5.1, saves omit trailing
+blank screen rows from scrollback. Rust/Cargo are pinned to
 1.89.0; dependencies remain locked.
 
 ## Install and update
@@ -48,7 +49,7 @@ and shell-installed executables on `PATH`.
 
    ```sh
    scripts/verify-release-artifact.sh archive.tar.xz <archive-sha256> \
-     v0.5.0 <reviewed-source-commit> /new/outside/checkout/acceptance
+     v0.5.1 <reviewed-source-commit> /new/outside/checkout/acceptance
    ```
 
 4. After review/authorization, tag the accepted source and publish the accepted

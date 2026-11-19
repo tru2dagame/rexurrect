@@ -41,7 +41,7 @@ Homebrew installs the release binary and optional zsh recorder without compiling
 **With the standard shell installer**, which puts `rexurrect` in `~/.cargo/bin`:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tru2dagame/rexurrect/releases/download/v0.5.0/rexurrect-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tru2dagame/rexurrect/releases/download/v0.5.1/rexurrect-installer.sh | sh
 ```
 
 This explicit URL selects the reviewed release. Homebrew is the normal
@@ -50,7 +50,7 @@ install/update path for this fork.
 **With cargo**, from reviewed source and Rust 1.89 or later:
 
 ```sh
-cargo install --git https://github.com/tru2dagame/rexurrect --tag v0.5.0 --locked
+cargo install --git https://github.com/tru2dagame/rexurrect --tag v0.5.1 --locked
 ```
 
 rexurrect talks to Rex through the `rex` CLI that ships with Rex: the one on your
