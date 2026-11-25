@@ -25,12 +25,15 @@ pub enum AutosaveCommand {
 #[derive(Debug)]
 pub struct InstallOptions {
     pub interval: Interval,
+    /// Re-register the installed job with its existing settings.
+    pub force: bool,
 }
 
 impl Default for InstallOptions {
     fn default() -> Self {
         InstallOptions {
             interval: Interval::DEFAULT,
+            force: false,
         }
     }
 }
@@ -44,6 +47,15 @@ pub fn run(command: &AutosaveCommand) -> Result<ExitCode> {
 
 /// `autosave install`, and the first step of `setup`.
 pub fn install(options: &InstallOptions) -> Result<ExitCode> {
+    if options.force {
+        let scheduler = scheduler::for_this_platform()?;
+        scheduler.reload()?;
+        println!(
+            "autosave reloaded: the existing {} keeps its settings",
+            scheduler.describe()
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
     let program = std::env::current_exe().with_context(|| "finding rexurrect's own path")?;
     let state = StateDir::from_env()?;
     let job = Job {

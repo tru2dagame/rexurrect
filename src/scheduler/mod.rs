@@ -9,6 +9,7 @@ mod systemd;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::num::NonZeroU32;
+use std::process::ExitCode;
 
 use crate::error::{Error, Result};
 use crate::settings;
@@ -35,6 +36,20 @@ pub trait Scheduler {
 
     /// Stops the job and removes it. `false` if there was nothing to remove.
     fn uninstall(&self) -> Result<bool>;
+
+    /// Queries the installed job without scheduling or running it.
+    fn check(&self) -> Result<ExitCode> {
+        Err(Error::new(
+            "doctor currently checks autosave on macOS (launchd) only",
+        ))
+    }
+
+    /// Re-registers the installed job without rewriting its settings.
+    fn reload(&self) -> Result<()> {
+        Err(Error::new(
+            "autosave install --force currently reloads macOS LaunchAgents only",
+        ))
+    }
 }
 
 /// Replaces the job's name in the scheduler (launchd's label, systemd's

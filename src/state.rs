@@ -41,8 +41,7 @@ impl StateDir {
             })
     }
 
-    /// A state directory at `root`, for unit tests.
-    #[cfg(test)]
+    /// The state directory at an already resolved path.
     pub fn at(root: PathBuf) -> StateDir {
         StateDir { root }
     }

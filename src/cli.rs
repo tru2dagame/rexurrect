@@ -20,6 +20,7 @@ pub enum Command {
     Save(SaveOptions),
     Restore(RestoreOptions),
     List,
+    Doctor,
     Autosave(AutosaveCommand),
     AutoRestore(AutoRestoreOptions),
     Report(ReportOptions),
@@ -37,11 +38,17 @@ impl Command {
             Command::Save(_) => Some("save"),
             Command::Restore(_) => Some("restore"),
             Command::List => Some("list"),
-            Command::Autosave(AutosaveCommand::Install(_)) => Some("autosave install"),
+            Command::Autosave(AutosaveCommand::Install(options)) if !options.force => {
+                Some("autosave install")
+            }
             Command::Autosave(AutosaveCommand::Uninstall) => Some("autosave uninstall"),
             Command::AutoRestore(_) => Some("auto-restore"),
             Command::Setup(_) => Some("setup"),
-            Command::Report(_) | Command::Help | Command::Version => None,
+            Command::Autosave(AutosaveCommand::Install(_))
+            | Command::Doctor
+            | Command::Report(_)
+            | Command::Help
+            | Command::Version => None,
         }
     }
 }
@@ -55,6 +62,7 @@ Commands:
   save      Save every session on the Rex server to a new snapshot
   restore   Recreate the latest snapshot's sessions that aren't live
   list      List the snapshots, newest first, with their session labels
+  doctor    Inspect the macOS autosave job and its latest snapshot (read-only)
   autosave install
             Run `save` every 15 minutes in the background (a launchd agent)
   autosave uninstall
@@ -86,6 +94,8 @@ Restore options:
 
 Autosave install and setup options:
   --interval <minutes>  Save this often instead (default: 15)
+  --force              Reload the existing macOS LaunchAgent as configured
+                       (autosave install only; cannot combine with --interval)
 
 Auto-restore options:
   --print-hook        Print the line that turns auto-restore on, to append to
@@ -149,6 +159,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, UsageE
         "save" => parse_save(&mut args).map(Command::Save),
         "restore" => parse_restore(&mut args).map(Command::Restore),
         "list" => no_options(&mut args, "list").map(|()| Command::List),
+        "doctor" => no_options(&mut args, "doctor").map(|()| Command::Doctor),
         "autosave" => parse_autosave(&mut args).map(Command::Autosave),
         "auto-restore" => parse_auto_restore(&mut args).map(Command::AutoRestore),
         "setup" => parse_install(&mut args, "setup").map(Command::Setup),
@@ -208,9 +219,11 @@ fn parse_autosave(args: &mut Args) -> Result<AutosaveCommand, UsageError> {
 /// The options of `autosave install`, which `setup` shares.
 fn parse_install(args: &mut Args, command: &str) -> Result<InstallOptions, UsageError> {
     let mut options = InstallOptions::default();
+    let mut interval_set = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--interval" => {
+                interval_set = true;
                 let minutes = args.value(&arg)?;
                 options.interval = Interval::parse_minutes(&minutes).ok_or_else(|| {
                     UsageError(format!(
@@ -218,8 +231,15 @@ fn parse_install(args: &mut Args, command: &str) -> Result<InstallOptions, Usage
                     ))
                 })?;
             }
+            "--force" if command == "autosave install" => options.force = true,
             _ => return Err(args.unexpected(&arg, command)),
         }
+    }
+    if options.force && interval_set {
+        return Err(UsageError(
+            "--force preserves the installed interval and cannot be combined with --interval"
+                .into(),
+        ));
     }
     Ok(options)
 }

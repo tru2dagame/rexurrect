@@ -782,18 +782,23 @@ when it updates, and a directory pinned at install would be gone after the next 
 autosave runs the `rex` a running Rex server runs instead (see [Which server](#which-server)).
 While Rex isn't running there's no server to save, and the autosave fails and logs it as above.
 
-**After upgrading rexurrect**, run `autosave install` once. An agent installed by an earlier
-rexurrect has the directory of the `rex` that was on your `PATH` back then pinned on its
-`PATH`, and keeps using that `rex` for as long as the directory exists, even after Rex has
-updated past it.
+If an older plist still has the Rex CLI directory pinned on its `PATH`, run
+`autosave install` to generate the current plist.
 
 `autosave uninstall` unloads the agent and removes its plist, then tells you how to remove the
 zsh recorder and the auto-restore line in `init.lua`. Your snapshots stay in the state
 directory.
 
-To check that autosave works, run `launchctl print gui/$(id -u)/io.github.cemcatik.rexurrect.autosave`
-(its `last exit code` should be 0 after the first run) and `rexurrect list` (a new snapshot
-every interval), and look in `rexurrect.log` for failures.
+On macOS, run `rexurrect doctor` to check whether the LaunchAgent is loaded, its interval,
+its most recent exit result, and when `latest.json` was updated in the agent's configured
+state directory. It only reads job status and snapshot metadata. It exits nonzero if
+it finds a problem or can't confirm a successful autosave run.
+
+If macOS rejects the launch after a rexurrect upgrade, or the plist exists but the agent
+is unloaded, run `rexurrect autosave install --force`. This re-registers the existing
+plist with launchd, preserving its interval, Rex server, state directory, and config path.
+For the standard timer, check `rexurrect doctor` again after the next scheduled run.
+Use `autosave install` without `--force` to regenerate the plist when changing settings.
 
 ## Linux
 

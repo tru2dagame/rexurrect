@@ -60,6 +60,7 @@ fn main() -> ExitCode {
         Command::Save(options) => logging_failure("save", save::run(&options)),
         Command::Restore(options) => logging_failure("restore", restore::run(&options)),
         Command::List => list::run(),
+        Command::Doctor => scheduler::for_this_platform().and_then(|scheduler| scheduler.check()),
         Command::Autosave(command) => autosave::run(&command),
         Command::AutoRestore(options) => {
             logging_failure("auto-restore", auto_restore::run(&options))

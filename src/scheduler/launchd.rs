@@ -10,7 +10,10 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitCode, Output, Stdio};
+use std::time::{Duration, Instant};
+
+mod doctor;
 
 use super::{Job, LABEL_VAR, Scheduler};
 use crate::account;
@@ -62,6 +65,23 @@ impl Launchd {
     fn is_loaded(&self) -> Result<bool> {
         Ok(launchctl(&["print", &self.service()])?.is_ok())
     }
+
+    /// Reads the loaded job, distinguishing an absent service from a query failure.
+    fn print_status(&self) -> Result<Option<String>> {
+        let target = self.service();
+        let out = launchctl_output(&["print", &target])?;
+        if out.status.success() {
+            return Ok(Some(String::from_utf8_lossy(&out.stdout).into_owned()));
+        }
+        let message = String::from_utf8_lossy(&out.stderr);
+        if message.contains("Could not find service") {
+            return Ok(None);
+        }
+        Err(Error::new(format!(
+            "couldn't inspect LaunchAgent {target}: {}",
+            message.trim()
+        )))
+    }
 }
 
 impl Scheduler for Launchd {
@@ -98,6 +118,48 @@ impl Scheduler for Launchd {
         }
         let removed = state::remove_if_exists(&self.plist_path())?;
         Ok(loaded || removed)
+    }
+
+    fn check(&self) -> Result<ExitCode> {
+        doctor::check(self)
+    }
+
+    fn reload(&self) -> Result<()> {
+        let path = self.plist_path();
+        if !path.is_file() {
+            return Err(Error::new(format!(
+                "no LaunchAgent plist at {}; run `rexurrect autosave install` first",
+                path.display()
+            )));
+        }
+        // Confirm the existing plist belongs to this job before stopping it.
+        let plist = Command::new("/usr/bin/plutil")
+            .args(["-extract", "Label", "raw", "-o", "-", path_str(&path)?])
+            .output()
+            .with_context(|| format!("reading the LaunchAgent plist {}", path.display()))?;
+        if !plist.status.success()
+            || String::from_utf8_lossy(&plist.stdout).trim_end_matches(['\r', '\n']) != self.label
+        {
+            return Err(Error::new(format!(
+                "{} is not a valid LaunchAgent plist for {}",
+                path.display(),
+                self.label
+            )));
+        }
+        if self.print_status()?.is_some() {
+            launchctl_ok(&["bootout", &self.service()])?;
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while self.print_status()?.is_some() {
+                if Instant::now() >= deadline {
+                    return Err(Error::new(format!(
+                        "timed out waiting for {} to unload",
+                        self.service()
+                    )));
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+        launchctl_ok(&["bootstrap", &self.domain, path_str(&path)?])
     }
 }
 
@@ -166,11 +228,7 @@ fn path_str(path: &Path) -> Result<&str> {
 
 /// Runs `launchctl` (from `PATH`): `Ok(Err(message))` when it ran and failed.
 fn launchctl(args: &[&str]) -> Result<std::result::Result<(), String>> {
-    let out = Command::new("launchctl")
-        .args(args)
-        .stdin(Stdio::null())
-        .output()
-        .with_context(|| format!("running `launchctl {}`", args.join(" ")))?;
+    let out = launchctl_output(args)?;
     if out.status.success() {
         return Ok(Ok(()));
     }
@@ -181,6 +239,14 @@ fn launchctl(args: &[&str]) -> Result<std::result::Result<(), String>> {
         out.status,
         stderr.trim()
     )))
+}
+
+fn launchctl_output(args: &[&str]) -> Result<Output> {
+    Command::new("launchctl")
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .with_context(|| format!("running `launchctl {}`", args.join(" ")))
 }
 
 /// Runs `launchctl`, failing if it does.

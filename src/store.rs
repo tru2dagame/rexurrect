@@ -12,6 +12,7 @@ use crate::error::{Context, Error, Result};
 use crate::retention::Retention;
 use crate::snapshot::Snapshot;
 use crate::state::{self, StateDir};
+use crate::timestamp::Timestamp;
 
 const SNAPSHOTS_DIR: &str = "snapshots";
 const LATEST: &str = "latest.json";
@@ -27,6 +28,33 @@ impl SnapshotStore {
             snapshots: state.join(SNAPSHOTS_DIR),
             latest: state.join(LATEST),
         }
+    }
+
+    /// The target and modification time of the latest pointer, without
+    /// reading terminal contents. A missing snapshot is an error.
+    pub fn latest_update(&self) -> Result<Option<(PathBuf, Timestamp)>> {
+        let link = match std::fs::symlink_metadata(&self.latest) {
+            Ok(link) => link,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => {
+                return Err(e).with_context(|| format!("inspecting {}", self.latest.display()));
+            }
+        };
+        let target = std::fs::read_link(&self.latest)
+            .with_context(|| format!("reading {}", self.latest.display()))?;
+        let id = self.latest_id(&target)?;
+        let snapshot = std::fs::metadata(self.snapshots.join(format!("{id}.json")))
+            .with_context(|| format!("checking the target of {}", self.latest.display()))?;
+        if !snapshot.is_file() {
+            return Err(Error::new(format!(
+                "{} does not point to a snapshot file",
+                self.latest.display()
+            )));
+        }
+        let updated = link
+            .modified()
+            .with_context(|| format!("reading the update time of {}", self.latest.display()))?;
+        Ok(Some((target, Timestamp::from_system_time(updated))))
     }
 
     /// Writes `snapshot` as a new file named for when it was taken, points
@@ -54,7 +82,13 @@ impl SnapshotStore {
                 return Err(e).with_context(|| format!("reading {}", self.latest.display()));
             }
         };
-        let id = target
+        let id = self.latest_id(&target)?;
+        Ok(self.read(id)?.map(|snapshot| (id.to_string(), snapshot)))
+    }
+
+    /// Resolve an identifier the way restore does, under the snapshots directory.
+    fn latest_id<'a>(&self, target: &'a Path) -> Result<&'a str> {
+        target
             .file_name()
             .and_then(OsStr::to_str)
             .and_then(snapshot_id)
@@ -64,8 +98,7 @@ impl SnapshotStore {
                     self.latest.display(),
                     target.display()
                 ))
-            })?;
-        Ok(self.read(id)?.map(|snapshot| (id.to_string(), snapshot)))
+            })
     }
 
     /// Every snapshot's identifier, newest first.
