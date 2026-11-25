@@ -179,6 +179,59 @@ fn a_dry_run_with_force_says_what_it_would_replace_and_changes_nothing() {
 }
 
 #[test]
+fn save_force_accepts_the_current_sessions_and_scrollback_without_restoring() {
+    let env = TestEnv::new();
+    let server = env.start_server();
+    let [a, b] = two_saved_sessions(&env, &server);
+    let previous = env.listed(&server);
+    let stub = restarted_at(&env, LATER, 1);
+    let block = a.block_ids()[0];
+    server.kill_session(&b.id);
+    server.run(&a.id, block, "echo zz-current-output");
+    server.wait_for_capture(&a.id, block, "current output", |text| {
+        text.contains("\nzz-current-output\n")
+    });
+    let blocked = run(&env, &server, &stub, &["save"]).assert_failure();
+    assert!(
+        blocked.stderr.contains("rexurrect save --force"),
+        "{blocked}"
+    );
+
+    let out = run(&env, &server, &stub, &["save", "--force"]).assert_success();
+    assert!(out.stdout.contains("saved 1 session(s)"), "{out}");
+    assert!(!out.stdout.contains("restored first"), "{out}");
+    assert_eq!(server.session_ids_labelled("zz-a"), [a.id.as_str()]);
+    assert_eq!(server.block_ids(&a.id), [block]);
+    assert!(server.session_ids_labelled("zz-b").is_empty());
+    let listed = env.listed(&server);
+    assert!(listed.lines().next().unwrap().ends_with("zz-a"), "{listed}");
+    assert_eq!(listed.lines().nth(1), previous.lines().next());
+
+    let state = env.state_dir();
+    let snapshot: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(state.join("latest.json")).unwrap()).unwrap();
+    let scrollback = snapshot["sessions"][0]["windows"][0]["layout"]["block"]["scrollback"]
+        .as_str()
+        .expect("saved scrollback");
+    assert!(
+        std::fs::read_to_string(state.join(scrollback))
+            .unwrap()
+            .lines()
+            .any(|line| line == "zz-current-output")
+    );
+
+    // Once we accept the current state, a later ordinary save honours a
+    // session the user closes instead of restoring it from the snapshot.
+    server.kill_session(&a.id);
+    let saved = run(&env, &server, &stub, &["save"]).assert_success();
+    assert!(
+        saved.stdout.contains("saved a snapshot with no sessions"),
+        "{saved}"
+    );
+    assert!(server.sessions().is_empty());
+}
+
+#[test]
 fn force_with_a_session_label_replaces_only_that_labels_sessions_and_does_not_count_as_restoring() {
     let env = TestEnv::new();
     let server = env.start_server();

@@ -61,6 +61,37 @@ fn save_on_a_fresh_server_with_no_sessions_keeps_the_latest_snapshot() {
     );
 }
 
+#[test]
+fn save_force_can_publish_an_empty_fresh_server_without_restoring() {
+    let env = TestEnv::new();
+    env.saved_on_an_earlier_server(&["zz-before"]);
+    let fresh = env.start_server();
+    let previous = env.listed(&fresh);
+    let force = || {
+        env.rexurrect(&fresh)
+            .args(["save", "--force"])
+            .run()
+            .assert_success()
+    };
+
+    let saved = force();
+    assert!(
+        saved.stdout.contains("saved a snapshot with no sessions"),
+        "{saved}"
+    );
+    assert!(fresh.sessions().is_empty());
+    let listed = env.listed(&fresh);
+    assert!(
+        listed.lines().next().unwrap().ends_with("(no sessions)"),
+        "{listed}"
+    );
+    assert_eq!(listed.lines().nth(1), previous.lines().next());
+
+    let repeated = force();
+    assert!(repeated.stdout.contains("nothing changed"), "{repeated}");
+    assert_eq!(env.listed(&fresh), listed);
+}
+
 /// On an emptied server instance, one rexurrect has restored into (here, the
 /// save with no snapshot yet), the user closed every session: a save records
 /// that, so neither a restore nor a restart brings them back.

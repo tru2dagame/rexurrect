@@ -22,12 +22,24 @@ use crate::timestamp::Timestamp;
 use crate::too_large::TooLargeBlocks;
 use crate::upkeep::{self, Live};
 
+#[derive(Debug, Default)]
+pub struct SaveOptions {
+    /// Save what is live without trying to restore the latest snapshot.
+    pub force: bool,
+}
+
+/// The server instance a save targets under the restore lock.
+struct SaveTarget<'a> {
+    lock: &'a RestoreLock,
+    server: &'a ServerStatus,
+    force: bool,
+}
+
 /// What a save did.
 pub enum Saved {
     /// A new snapshot, now the latest.
     Snapshot { path: PathBuf, sessions: usize },
-    /// The server instance is emptied (see [`save`]): a new snapshot with no
-    /// sessions, now the latest.
+    /// A new snapshot with no sessions, now the latest.
     Emptied { path: PathBuf },
     /// The server instance is emptied, but the latest snapshot already has
     /// no sessions: nothing changed, so nothing was written.
@@ -37,12 +49,13 @@ pub enum Saved {
     EmptyServer,
 }
 
-/// Restores first if rexurrect hasn't restored into this server instance yet,
-/// so that a save on a freshly started server can't replace the latest
-/// snapshot with a near-empty one. The blocks that restore created are
-/// saved as it created them, like those of any restore in its startup
-/// window: their shells are still starting. Still saves if some sessions
-/// failed to restore, but then exits non-zero.
+/// An ordinary save restores first on an unrestored server instance, so a
+/// newly started server can't replace the latest snapshot with a near-empty
+/// one. A forced save accepts the live state instead.
+///
+/// An ordinary save keeps the blocks as restore created them while their
+/// shells are still starting. If some sessions fail to restore, it still
+/// saves and then exits non-zero.
 ///
 /// If every session it tried failed, it restored nothing, so it saves
 /// nothing either: the latest snapshot stays as it is. It records the
@@ -52,46 +65,48 @@ pub enum Saved {
 /// is saved from such an instance, it isn't emptied (ADR-0009): the user
 /// never had the latest snapshot's sessions to close.
 ///
-/// On an emptied server instance, an empty server is saved as a snapshot
-/// with no sessions, unless the latest snapshot already has none.
+/// When forced or on an emptied server instance, an empty server is saved
+/// as a snapshot with no sessions, unless the latest snapshot already has none.
 ///
-/// On an unrestored server instance that holds a session Rex carried over
-/// from the latest snapshot (ADR-0008), it neither restores nor saves: a
+/// A plain save on an unrestored server instance holding a session Rex carried
+/// over from the latest snapshot (ADR-0008) neither restores nor saves: a
 /// restore would skip Rex's copy, and a save replace the latest snapshot
 /// with it, without its scrollback or programs. Auto-restore at the
 /// server's start, or `restore --force`, replaces it first.
 ///
 /// Holds the restore lock throughout: a save that finds a restore running
 /// waits for it rather than saving a half-restored server.
-pub fn run() -> Result<ExitCode> {
+pub fn run(options: &SaveOptions) -> Result<ExitCode> {
     // Configuration first: a bad setting fails before anything is restored.
     let config = Config::load()?;
     let rex = Rex::from_env()?;
     let state = StateDir::from_env()?;
     let lock = RestoreLock::acquire(&state)?;
-    // Read once, under the lock: restoring first and saving agree on the
-    // server instance, and on which host is local.
+    // Restoring first and capturing use the same initial server status.
     let server = rex.server_status()?;
-    if !lock.is_restored(&server.instance_id)?
+    if !options.force
+        && !lock.is_restored(&server.instance_id)?
         && restore::holds_carried_over_session(&rex, &state, &server)?
     {
         return Err(Error::new(
             "this server instance holds sessions Rex carried over when it started, without their \
              scrollback or programs, which rexurrect hasn't replaced yet, so nothing was \
-             saved and the latest snapshot is unchanged. To replace them with the latest \
-             snapshot's sessions, run `rexurrect restore --force`, or let auto-restore do it \
-             at the next server start",
+             saved and the latest snapshot is unchanged. Use `rexurrect save --force` to save \
+             the current sessions as they are, or `rexurrect restore --force` to replace them \
+             with the sessions from the latest snapshot",
         ));
     }
     let mut status = ExitCode::SUCCESS;
-    if let Some(report) = restore::restore_unrestored_instance(
-        &rex,
-        &state,
-        &lock,
-        &server,
-        &config,
-        &RestoreOptions::default(),
-    )? {
+    if !options.force
+        && let Some(report) = restore::restore_unrestored_instance(
+            &rex,
+            &state,
+            &lock,
+            &server,
+            &config,
+            &RestoreOptions::default(),
+        )?
+    {
         println!("restored first: this server instance hadn't been restored into yet");
         let mut out = std::io::stdout().lock();
         status = report.finish(&state, "save (restoring first)", &mut out);
@@ -106,7 +121,12 @@ pub fn run() -> Result<ExitCode> {
             )));
         }
     }
-    match save(&rex, &state, &lock, &server, config)? {
+    let target = SaveTarget {
+        lock: &lock,
+        server: &server,
+        force: options.force,
+    };
+    match save(&rex, &state, target, config)? {
         Saved::Snapshot { path, sessions } => {
             println!("saved {sessions} session(s) to {}", path.display());
         }
@@ -130,26 +150,25 @@ pub fn run() -> Result<ExitCode> {
     Ok(status)
 }
 
-/// Saves every session worth saving on the server `server` (its
-/// `server.status`, read under `lock`) describes.
+/// Saves every session worth saving in the target server instance.
 ///
 /// If none is (an empty server), it writes a snapshot with no sessions only
-/// on an emptied server instance (ADR-0009): the user closed its sessions.
-/// Otherwise it writes nothing, and the latest snapshot stays as it is.
-pub fn save(
-    rex: &Rex,
-    state: &StateDir,
-    lock: &RestoreLock,
-    server: &ServerStatus,
-    config: Config,
-) -> Result<Saved> {
+/// when forced or when the user closed its sessions (ADR-0009).
+fn save(rex: &Rex, state: &StateDir, target: SaveTarget<'_>, config: Config) -> Result<Saved> {
     // Taken first: each kept session's scrollback is saved under the
     // snapshot's name as the walk reaches it, and startup windows are judged
     // as of then.
     let taken_at = Timestamp::now();
     let starting = StartingSessions::load(state)?.at(taken_at);
     let replaying: Vec<String> = starting.snapshots().map(str::to_string).collect();
-    let saved = save_snapshot(rex, state, lock, server, config, taken_at, starting);
+    // Keep the sources of any replay already in progress, but a forced
+    // save reads the live blocks instead of copying their startup state.
+    let starting = if target.force {
+        Starting::default()
+    } else {
+        starting
+    };
+    let saved = save_snapshot(rex, state, target, config, taken_at, starting);
     // Scrollback is kept as long as its snapshot: old snapshots' goes with
     // them, and a save that wrote no snapshot (an empty server it didn't
     // save, a failure) leaves none behind. A restore in its startup window keeps its
@@ -170,12 +189,16 @@ pub fn save(
 fn save_snapshot(
     rex: &Rex,
     state: &StateDir,
-    lock: &RestoreLock,
-    server: &ServerStatus,
+    target: SaveTarget<'_>,
     config: Config,
     taken_at: Timestamp,
     starting: Starting,
 ) -> Result<Saved> {
+    let SaveTarget {
+        lock,
+        server,
+        force,
+    } = target;
     let lineages = LineageMap::load(state)?;
     let mut context = capture::CaptureContext::read(
         state,
@@ -230,11 +253,15 @@ fn save_snapshot(
             .with_context(|| "remembering the programs seen in blocks")?;
     }
     let restored = lock.restored(&server.instance_id)?;
+    let accept_instance = restored == Restored::Failed || (force && restored == Restored::No);
     if sessions.is_empty() {
-        if restored != Restored::Yes {
+        if !force && restored != Restored::Yes {
             return Ok(Saved::EmptyServer);
         }
         if latest_has_no_sessions(state) {
+            if accept_instance {
+                lock.record_restored(&server.instance_id)?;
+            }
             return Ok(Saved::StillEmpty);
         }
     }
@@ -243,12 +270,11 @@ fn save_snapshot(
         .validate()
         .with_context(|| "the snapshot failed validation, so nothing was written")?;
     let path = SnapshotStore::new(state).write(&snapshot, config.retention)?;
-    if restored == Restored::Failed {
-        // A snapshot saved from it: emptying it from now on is the user's
-        // doing.
+    if accept_instance {
+        // The published snapshot is now the baseline for this instance.
         lock.record_restored(&server.instance_id).with_context(|| {
             format!(
-                "saved {}, but then failed to record this server instance as restored",
+                "saved {}, but then failed to record the new baseline for this server instance",
                 path.display()
             )
         })?;

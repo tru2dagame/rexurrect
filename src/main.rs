@@ -57,7 +57,7 @@ fn main() -> ExitCode {
         config::warn_about_moved_variables(name);
     }
     let result = match command {
-        Command::Save => logging_failure("save", save::run()),
+        Command::Save(options) => logging_failure("save", save::run(&options)),
         Command::Restore(options) => logging_failure("restore", restore::run(&options)),
         Command::List => list::run(),
         Command::Autosave(command) => autosave::run(&command),

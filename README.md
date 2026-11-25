@@ -179,6 +179,10 @@ rexurrect list      # list the snapshots, newest first
   labels get fresh default labels on restore, not stale copies like `Window 1a2b3c4d`. Each
   save is a new timestamped snapshot; `latest.json` points at the newest. The newest 10
   snapshots are kept (set `keep` in the [config file](#settings) to keep a different number).
+  - **`save --force`** saves the live state in the usual snapshot directory without restoring
+    first. This works even if Rex carried the sessions over or the server is empty. The saved
+    state becomes the baseline for this server instance, so later autosaves do not restore
+    first. Previous snapshots remain available under the normal retention policy.
   - This fork saves every session with at least one window, including a default shell in your
     home directory with no recorded last command. Such a shell can hold useful scrollback
     after its command finishes. Empty default windows are saved too: names, working directory
@@ -241,8 +245,9 @@ session and block IDs, as every restored session does. See
   either (next point).
 - **`save`** on a freshly started server that still holds Rex's copies saves nothing: it leaves
   `latest.json` alone, exits non-zero and logs that the sessions need replacing, so an autosave
-  never replaces your latest snapshot with copies that have lost their scrollback. Autosaves pause
-  that way, logging each time, until auto-restore or `restore --force` has replaced them.
+  never replaces your latest snapshot with copies that have lost their scrollback. Run
+  `save --force` to accept the current sessions instead. Autosaves resume after a forced save
+  or after auto-restore or `restore --force` has replaced the carried-over sessions.
 
 rexurrect knows Rex's copy of a session by its blocks: Rex keeps their IDs, so a live block
 that's in a snapshot taken before the server started can only have been carried over by Rex.
@@ -376,8 +381,8 @@ Snapshots and rexurrect's own bookkeeping live in its state directory:
 It holds `snapshots/`, `latest.json` and `lineage.json`, the lineage map, which remembers which
 live session restore created from which saved one. Deleting `lineage.json` makes the next
 `restore` recreate sessions that are already live. `restored-instances` names the server
-instances restore has run in (the 32 most recent), marking those where every session a save
-tried to restore first failed, and `restore.lock` makes restores take turns.
+instances restored into or accepted by a forced save (the 32 most recent), marking those where
+every session a save tried to restore first failed, and `restore.lock` makes restores take turns.
 `starting-sessions.json` holds what restore created each session with, for saves in its first
 two minutes.
 `recorder/` holds one file per block with the last command the recorder recorded, rewritten

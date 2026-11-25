@@ -2,7 +2,7 @@
 //!
 //! A server instance is one run of the Rex server, told apart by the
 //! `instance_id` in `server.status`. rexurrect remembers the instances it
-//! restored into, so it can tell a freshly started server (an unrestored
+//! restored into or saved with `--force`, so it can tell a freshly started server (an unrestored
 //! server instance) from one the user has been working in. It remembers
 //! several, not just the last: another server can restore too (one started
 //! by hand that runs the user's init.lua, auto-restore included), and that
@@ -73,14 +73,13 @@ impl RestoreLock {
             .map_or(Restored::No, |(_, restored)| restored))
     }
 
-    /// Whether a save should no longer restore into `instance_id` first: a
-    /// restore into it finished, or a save recorded one that failed.
+    /// Whether a save should no longer restore into `instance_id` first.
     pub fn is_restored(&self, instance_id: &str) -> Result<bool> {
         Ok(self.restored(instance_id)? != Restored::No)
     }
 
-    /// Records that a restore into `instance_id` finished, at least in part,
-    /// or that a snapshot was saved from it since a failed one.
+    /// Records a completed restore, or acceptance of the current instance
+    /// after a forced save or a save following a failed restore.
     pub fn record_restored(&self, instance_id: &str) -> Result<()> {
         self.record(instance_id, Restored::Yes)
     }
@@ -129,9 +128,9 @@ impl RestoreLock {
 pub enum Restored {
     /// Nothing: an unrestored server instance. A save restores first.
     No,
-    /// A restore into it finished, at least in part, or found nothing to
-    /// restore; or a snapshot was saved from it since a failed one. An
-    /// empty server on it is an emptied server instance (ADR-0009).
+    /// A restore finished or found nothing to restore, or a save accepted
+    /// the current state. An empty server on it is an emptied server instance
+    /// (ADR-0009).
     Yes,
     /// A save that restored first found every session it tried failed. It
     /// doesn't restore first again, but until a snapshot is saved from the

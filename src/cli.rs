@@ -13,10 +13,11 @@ use crate::auto_restore::AutoRestoreOptions;
 use crate::autosave::{AutosaveCommand, InstallOptions};
 use crate::report::ReportOptions;
 use crate::restore::RestoreOptions;
+use crate::save::SaveOptions;
 use crate::scheduler::Interval;
 
 pub enum Command {
-    Save,
+    Save(SaveOptions),
     Restore(RestoreOptions),
     List,
     Autosave(AutosaveCommand),
@@ -33,7 +34,7 @@ impl Command {
     /// prints (a hook's output reaches its agent).
     pub fn name(&self) -> Option<&'static str> {
         match self {
-            Command::Save => Some("save"),
+            Command::Save(_) => Some("save"),
             Command::Restore(_) => Some("restore"),
             Command::List => Some("list"),
             Command::Autosave(AutosaveCommand::Install(_)) => Some("autosave install"),
@@ -68,6 +69,10 @@ Commands:
   setup     Turn autosave on, then print the lines that turn auto-restore
             and the zsh recorder on, for you to add
   help      Show this help
+
+Save options:
+  --force            Save the current sessions without restoring first,
+                     even if Rex carried them over or the server is empty
 
 Restore options:
   --snapshot <id>    Restore from this snapshot (an ID from `list`) instead
@@ -141,7 +146,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, UsageE
         return Err(UsageError("missing command".into()));
     };
     match command.as_str() {
-        "save" => no_options(&mut args, "save").map(|()| Command::Save),
+        "save" => parse_save(&mut args).map(Command::Save),
         "restore" => parse_restore(&mut args).map(Command::Restore),
         "list" => no_options(&mut args, "list").map(|()| Command::List),
         "autosave" => parse_autosave(&mut args).map(Command::Autosave),
@@ -159,6 +164,17 @@ fn no_options(args: &mut Args, command: &str) -> Result<(), UsageError> {
         Some(arg) => Err(args.unexpected(&arg, command)),
         None => Ok(()),
     }
+}
+
+fn parse_save(args: &mut Args) -> Result<SaveOptions, UsageError> {
+    let mut options = SaveOptions::default();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--force" => options.force = true,
+            _ => return Err(args.unexpected(&arg, "save")),
+        }
+    }
+    Ok(options)
 }
 
 fn parse_restore(args: &mut Args) -> Result<RestoreOptions, UsageError> {
