@@ -7,8 +7,10 @@ after their commands exit. Starting with v0.5.0, saves recheck the server before
 publishing a snapshot, and restores handle unavailable agent sessions and long
 command lines more conservatively. Starting with v0.5.1, saves omit trailing
 blank screen rows from scrollback. Starting with v0.5.2, `save --force`
-can accept the current live state without restoring first. Rust/Cargo are pinned to
-1.89.0; dependencies remain locked.
+can accept the current live state without restoring first. Starting with v0.5.3,
+`doctor` checks macOS autosave and `autosave install --force` reloads an existing
+LaunchAgent with its current settings. Rust/Cargo are pinned to 1.89.0; dependencies
+remain locked.
 
 ## Install and update
 
@@ -50,7 +52,7 @@ and shell-installed executables on `PATH`.
 
    ```sh
    scripts/verify-release-artifact.sh archive.tar.xz <archive-sha256> \
-     v0.5.2 <reviewed-source-commit> /new/outside/checkout/acceptance
+     v0.5.3 <reviewed-source-commit> /new/outside/checkout/acceptance
    ```
 
 4. After review/authorization, tag the accepted source and publish the accepted
